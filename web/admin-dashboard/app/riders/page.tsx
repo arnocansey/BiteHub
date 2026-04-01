@@ -122,7 +122,7 @@ export default function RidersPage() {
           </div>
         </div>
 
-        <div className="grid gap-px bg-slate-800 xl:grid-cols-[1.05fr_1.12fr_0.68fr]">
+        <div className="grid gap-px bg-slate-800 xl:grid-cols-[1.02fr_0.98fr] 2xl:grid-cols-[1.02fr_1.08fr_0.7fr]">
           <section className="bg-[#0b1424] p-5">
             <div className="grid gap-3 sm:grid-cols-2">
               {[
@@ -156,7 +156,7 @@ export default function RidersPage() {
               </div>
 
               <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800">
-                <div className="grid grid-cols-[0.9fr_1.2fr_0.9fr_1.2fr_1.1fr_0.9fr_0.8fr] gap-3 bg-slate-900/90 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <div className="grid grid-cols-[0.9fr_1.1fr_0.8fr_1.1fr_1fr_0.85fr_0.75fr] gap-3 bg-slate-900/90 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                   <span>ID</span>
                   <span>Customer</span>
                   <span>Items</span>
@@ -166,12 +166,12 @@ export default function RidersPage() {
                   <span>ETA</span>
                 </div>
 
-                <div className="max-h-[530px] overflow-y-auto bg-[#0c1526]">
+                <div className="max-h-[430px] overflow-y-auto bg-[#0c1526]">
                   {feedRows.length ? (
                     feedRows.map((row, index) => (
                       <div
                         key={row.id}
-                        className={`grid grid-cols-[0.9fr_1.2fr_0.9fr_1.2fr_1.1fr_0.9fr_0.8fr] gap-3 px-4 py-3 text-sm text-slate-200 ${
+                        className={`grid grid-cols-[0.9fr_1.1fr_0.8fr_1.1fr_1fr_0.85fr_0.75fr] gap-3 px-4 py-3 text-[13px] text-slate-200 ${
                           index % 2 === 0 ? "bg-white/[0.015]" : "bg-transparent"
                         }`}
                       >
@@ -206,11 +206,11 @@ export default function RidersPage() {
             </article>
           </section>
 
-          <section className="relative overflow-hidden bg-[#07101d] p-5">
+          <section className="relative overflow-hidden bg-[#07101d] p-5 2xl:border-l 2xl:border-slate-800">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.15),transparent_25%),radial-gradient(circle_at_80%_30%,rgba(249,115,22,0.12),transparent_18%),radial-gradient(circle_at_60%_75%,rgba(56,189,248,0.1),transparent_20%)]" />
             <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:48px_48px]" />
 
-            <div className="relative h-full min-h-[720px] rounded-[28px] border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.65),rgba(2,6,23,0.85))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
+            <div className="relative h-full min-h-[540px] rounded-[28px] border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.65),rgba(2,6,23,0.85))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] xl:min-h-[600px] 2xl:min-h-[720px]">
               <div className="absolute left-[12%] top-[22%] h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_10px_rgba(16,185,129,0.12)]" />
               <div className="absolute left-[28%] top-[34%] h-3 w-3 rounded-full bg-orange-400 shadow-[0_0_0_10px_rgba(249,115,22,0.12)]" />
               <div className="absolute left-[43%] top-[48%] h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_10px_rgba(16,185,129,0.12)]" />
@@ -252,7 +252,7 @@ export default function RidersPage() {
             </div>
           </section>
 
-          <aside className="bg-[#0a1220] p-5">
+          <aside className="bg-[#0a1220] p-5 xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-slate-800">
             <div className="rounded-[26px] border border-slate-700 bg-[#0f1829] p-4">
               <div className="flex items-center justify-between">
                 <div>

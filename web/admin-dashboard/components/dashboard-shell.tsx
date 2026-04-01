@@ -128,7 +128,7 @@ export function DashboardShell({
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f6f7] p-4 md:p-6">
+    <main className="min-h-screen bg-[#f6f6f7] p-3 md:p-4 xl:h-screen xl:overflow-hidden">
       {showLogoutPrompt ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
@@ -157,8 +157,8 @@ export function DashboardShell({
         </div>
       ) : null}
 
-      <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[260px_1fr]">
-        <aside className="self-start rounded-[30px] bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
+      <div className="grid h-full gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
+        <aside className="self-start rounded-[28px] bg-white p-4 shadow-sm xl:h-[calc(100vh-2rem)] xl:overflow-y-auto">
           <div className="flex items-center gap-4 px-2">
             <div className="flex h-16 w-16 items-center justify-center">
               <Image src="/bitehub-icon.png" alt="BiteHub" width={64} height={64} className="h-16 w-16 object-contain" priority />
@@ -218,9 +218,9 @@ export function DashboardShell({
           </nav>
         </aside>
 
-        <section className="space-y-5">
+        <section className="min-w-0 space-y-4 xl:h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
           {superAdmin ? (
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[30px] bg-white px-6 py-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] bg-white px-5 py-4 shadow-sm">
               <label className="flex min-w-[320px] flex-1 items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-slate-400">
                 <Search className="h-4 w-4" />
                 <input
@@ -351,11 +351,11 @@ export function DashboardShell({
             </div>
           ) : null}
 
-          <header className="rounded-[30px] bg-white p-6 shadow-sm">
+          <header className="rounded-[28px] bg-white p-5 shadow-sm">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-500">Manager Workspace</p>
             <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-3xl font-semibold text-slate-900">{title}</h2>
+                <h2 className="text-2xl font-semibold text-slate-900 xl:text-3xl">{title}</h2>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
               </div>
               <div className="flex items-start gap-3">
