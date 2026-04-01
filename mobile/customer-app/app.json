@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "BiteHub Customer",
+    "slug": "bitehub-customer",
+    "scheme": "bitehub-customer",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "platforms": ["ios", "android"],
+    "userInterfaceStyle": "light",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
+    "icon": "./assets/bitehub-icon.png",
+    "splash": {
+      "image": "./assets/bitehub-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#040000"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.bitehub.customer",
+      "buildNumber": "1.0.0",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "BiteHub uses your location to show nearby restaurants and improve delivery accuracy."
+      },
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.bitehub.customer",
+      "versionCode": 1,
+      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/bitehub-icon.png",
+        "backgroundColor": "#040000"
+      }
+    },
+    "extra": {
+      "appVariant": "customer"
+    }
+  }
+}

@@ -1,0 +1,16 @@
+node_modules
+.next
+dist
+build
+.expo
+.turbo
+coverage
+.env
+.env.*
+!.env.example
+prisma/migrations
+*.log
+*.tsbuildinfo
+android
+ios
+

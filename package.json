@@ -1,0 +1,37 @@
+{
+  "name": "bitehub-platform",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "backend",
+    "web/admin-dashboard",
+    "mobile/customer-app",
+    "mobile/vendor-app",
+    "mobile/rider-app"
+  ],
+  "overrides": {
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.4"
+  },
+  "scripts": {
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:admin": "npm --prefix web/admin-dashboard run dev",
+    "dev:customer": "npm --prefix mobile/customer-app run start",
+    "dev:vendor": "npm --prefix mobile/vendor-app run start",
+    "dev:rider": "npm --prefix mobile/rider-app run start",
+    "build": "npm --prefix backend run build && npm --prefix web/admin-dashboard run build",
+    "verify": "npm --prefix backend run prisma:generate && npm run build",
+    "audit:prod": "npm audit --omit=dev",
+    "deploy:web:vercel": "npx vercel --cwd web/admin-dashboard --prod",
+    "deploy:mobile:customer": "npm --prefix mobile/customer-app exec eas build --profile customer-production --platform all --non-interactive",
+    "deploy:mobile:vendor": "npm --prefix mobile/vendor-app exec eas build --profile vendor-production --platform all --non-interactive",
+    "deploy:mobile:rider": "npm --prefix mobile/rider-app exec eas build --profile rider-production --platform all --non-interactive"
+  },
+  "devDependencies": {
+    "metro": "^0.81.5",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "react-native": "0.83.4"
+  }
+}

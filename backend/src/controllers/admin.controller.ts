@@ -1,0 +1,998 @@
+import type { Request, Response } from "express";
+import bcrypt from "bcryptjs";
+import { ApprovalStatus, DeliveryStatus, PaymentMethod, RestaurantStatus, UserRole } from "../generated/prisma/client";
+import { DispatchMode, GroupOrderStatus, ScheduledOrderStatus, SubscriptionStatus } from "../generated/prisma/enums";
+import { prisma } from "../config/prisma";
+import { emitOrderUpdate } from "../realtime/socket";
+import { createDeliveryEvent, upsertEtaPrediction } from "../services/order-trust.service";
+import { calculateSettlementBreakdown } from "../services/settlement.service";
+
+function toRadians(value: number) {
+  return (value * Math.PI) / 180;
+}
+
+function distanceInKm(aLat: number, aLng: number, bLat: number, bLng: number) {
+  const earthRadiusKm = 6371;
+  const dLat = toRadians(bLat - aLat);
+  const dLng = toRadians(bLng - aLng);
+  const lat1 = toRadians(aLat);
+  const lat2 = toRadians(bLat);
+
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.sin(dLng / 2) * Math.sin(dLng / 2) * Math.cos(lat1) * Math.cos(lat2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+const adminProfilePublicSelect = {
+  id: true,
+  userId: true,
+  title: true
+} as const;
+
+const platformSettingsDelegate = prisma as typeof prisma & {
+  platformSettings: any;
+};
+
+async function getPlatformSettingsRecord() {
+  return platformSettingsDelegate.platformSettings.upsert({
+    where: { key: "DEFAULT" },
+    update: {},
+    create: {
+      key: "DEFAULT",
+      dispatchMode: DispatchMode.AUTO,
+      supportEmail: "ops@bitehub.app",
+      paymentMethods: [PaymentMethod.CASH, PaymentMethod.CARD, PaymentMethod.MOBILE_MONEY],
+      vendorCommissionRate: "15.00",
+      riderCommissionRate: "2.50",
+      serviceFeeRate: "5.00",
+      taxRate: "7.50",
+      payoutDelayDays: 2,
+      minimumPayoutAmount: "5000.00",
+      platformSubscriptionEnabled: true,
+      defaultTrialDays: 14,
+      subscriptions: {
+        create: [
+          {
+            name: "Starter",
+            code: "STARTER",
+            audienceLabel: "Small vendors",
+            monthlyPrice: "0.00",
+            yearlyPrice: "0.00",
+            orderCommissionRate: "15.00",
+            deliveryCommissionRate: "2.50",
+            benefitsSummary: "Basic listing, standard analytics, and live order management.",
+            isActive: true,
+            sortOrder: 0
+          },
+          {
+            name: "Growth",
+            code: "GROWTH",
+            audienceLabel: "Scaling kitchens",
+            monthlyPrice: "25000.00",
+            yearlyPrice: "250000.00",
+            orderCommissionRate: "12.50",
+            deliveryCommissionRate: "2.00",
+            benefitsSummary: "Featured placement, retention tools, and richer operational analytics.",
+            isActive: true,
+            sortOrder: 1
+          }
+        ]
+      }
+    },
+    include: {
+      subscriptions: {
+        orderBy: { sortOrder: "asc" }
+      }
+    }
+  });
+}
+
+async function buildSettlementPreview() {
+  const [settings, deliveredOrders, batches] = (await Promise.all([
+    getPlatformSettingsRecord(),
+    prisma.order.findMany({
+      where: {
+        status: "DELIVERED",
+        payment: {
+          status: "PAID"
+        }
+      },
+      include: {
+        restaurant: {
+          include: {
+            vendorProfile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        },
+        delivery: {
+          include: {
+            riderProfile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        },
+        payment: true,
+        settlement: true
+      },
+      orderBy: { deliveredAt: "desc" }
+    } as any),
+    prisma.auditLog.findMany({
+      where: { entityType: "SETTLEMENT_BATCH" },
+      orderBy: { createdAt: "desc" },
+      take: 10
+    })
+  ])) as [any, any[], any[]];
+
+  const vendorBuckets = new Map<string, any>();
+  const riderBuckets = new Map<string, any>();
+  const minimumPayout = Number(settings.minimumPayoutAmount);
+
+  deliveredOrders.forEach((order) => {
+    const vendor = order.restaurant.vendorProfile;
+    const rider = order.delivery?.riderProfile;
+    const settlement =
+      order.settlement ??
+      calculateSettlementBreakdown({
+        subtotalAmount: order.subtotalAmount,
+        deliveryFee: order.deliveryFee,
+        totalAmount: order.totalAmount,
+        vendorCommissionRate: settings.vendorCommissionRate,
+        riderCommissionRate: settings.riderCommissionRate,
+        serviceFeeRate: settings.serviceFeeRate,
+        taxRate: settings.taxRate
+      });
+    const vendorNet = Number(settlement.vendorPayoutAmount ?? 0);
+    const riderNet = Number(settlement.riderPayoutAmount ?? 0);
+
+    if (vendor?.id) {
+      const current = vendorBuckets.get(vendor.id) ?? {
+        profileId: vendor.id,
+        userId: vendor.userId,
+        payeeName: vendor.businessName,
+        contactName: `${vendor.user?.firstName ?? ""} ${vendor.user?.lastName ?? ""}`.trim(),
+        payoutBankName: vendor.payoutBankName,
+        payoutAccountNumber: vendor.payoutAccountNumber,
+        payoutVerified: vendor.payoutVerified,
+        totalAmount: 0,
+        orders: []
+      };
+      current.totalAmount += vendorNet;
+      current.orders.push({
+        orderId: order.id,
+        restaurantName: order.restaurant.name,
+        amount: vendorNet
+      });
+      vendorBuckets.set(vendor.id, current);
+    }
+
+    if (rider?.id) {
+      const current = riderBuckets.get(rider.id) ?? {
+        profileId: rider.id,
+        userId: rider.userId,
+        payeeName: `${rider.user?.firstName ?? ""} ${rider.user?.lastName ?? ""}`.trim() || "Rider",
+        vehicleType: rider.vehicleType,
+        totalAmount: 0,
+        orders: []
+      };
+      current.totalAmount += riderNet;
+      current.orders.push({
+        orderId: order.id,
+        restaurantName: order.restaurant.name,
+        amount: riderNet
+      });
+      riderBuckets.set(rider.id, current);
+    }
+  });
+
+  const vendors = Array.from(vendorBuckets.values())
+    .map((item) => ({
+      ...item,
+      totalAmount: Number(item.totalAmount.toFixed(2)),
+      eligible: item.totalAmount >= minimumPayout && Boolean(item.payoutVerified)
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const riders = Array.from(riderBuckets.values())
+    .map((item) => ({
+      ...item,
+      totalAmount: Number(item.totalAmount.toFixed(2)),
+      eligible: item.totalAmount >= minimumPayout
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  return {
+    settings: {
+      payoutDelayDays: settings.payoutDelayDays,
+      minimumPayoutAmount: Number(settings.minimumPayoutAmount)
+    },
+    summary: {
+      eligibleVendorCount: vendors.filter((item) => item.eligible).length,
+      eligibleRiderCount: riders.filter((item) => item.eligible).length,
+      vendorPayoutDue: Number(vendors.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2)),
+      riderPayoutDue: Number(riders.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2))
+    },
+    vendors,
+    riders,
+    batches
+  };
+}
+
+export const adminController = {
+  async overview(_req: Request, res: Response) {
+    const [users, orders, restaurants] = await Promise.all([
+      prisma.user.count(),
+      prisma.order.count(),
+      prisma.restaurant.count()
+    ]);
+
+    res.json({ users, orders, restaurants });
+  },
+
+  async users(_req: Request, res: Response) {
+    const users = await prisma.user.findMany({
+      include: {
+        customerProfile: true,
+        vendorProfile: true,
+        riderProfile: true,
+        adminProfile: {
+          select: adminProfilePublicSelect
+        }
+      }
+    });
+    res.json(users);
+  },
+
+  async vendors(_req: Request, res: Response) {
+    const vendors = await prisma.vendorProfile.findMany({
+      include: {
+        user: true,
+        restaurants: {
+          include: {
+            orders: {
+              include: {
+                payment: true
+              }
+            }
+          },
+          orderBy: { createdAt: "desc" }
+        }
+      },
+      orderBy: {
+        businessName: "asc"
+      }
+    });
+
+    res.json(vendors);
+  },
+
+  async createVendor(req: Request, res: Response) {
+    const { firstName, lastName, email, phone, password, businessName } = req.body as {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string;
+      password: string;
+      businessName: string;
+    };
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, ...(phone ? [{ phone }] : [])]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: "A user with this email or phone already exists." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const vendor = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        email,
+        phone,
+        passwordHash,
+        role: UserRole.VENDOR,
+        vendorProfile: {
+          create: {
+            businessName
+          }
+        }
+      },
+      include: {
+        vendorProfile: {
+          include: {
+            user: true,
+            restaurants: true
+          }
+        }
+      }
+    });
+
+    res.status(201).json(vendor.vendorProfile);
+  },
+
+  async promoteCustomerToAdmin(req: Request, res: Response) {
+    const userId = String(req.params.userId);
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      include: { customerProfile: true, adminProfile: true }
+    });
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.role !== UserRole.CUSTOMER || !user.customerProfile) {
+      return res.status(400).json({ message: "Only customer accounts can be promoted to admin." });
+    }
+
+    const promoted = await prisma.user.update({
+      where: { id: userId },
+      data: {
+        role: UserRole.ADMIN,
+        adminProfile: user.adminProfile
+          ? {
+              update: {
+                title: req.body.title ?? user.adminProfile.title ?? "Platform Administrator"
+              }
+            }
+          : {
+              create: {
+                title: req.body.title ?? "Platform Administrator"
+              }
+            }
+      },
+      include: {
+        customerProfile: true,
+        vendorProfile: true,
+        riderProfile: true,
+        adminProfile: {
+          select: adminProfilePublicSelect
+        }
+      }
+    });
+
+    res.json(promoted);
+  },
+
+  async pendingVendors(_req: Request, res: Response) {
+    const vendors = await prisma.vendorProfile.findMany({
+      where: { approvalStatus: ApprovalStatus.PENDING },
+      include: { user: true, restaurants: true }
+    });
+    res.json(vendors);
+  },
+
+  async pendingRiders(_req: Request, res: Response) {
+    const riders = await prisma.riderProfile.findMany({
+      where: { approvalStatus: ApprovalStatus.PENDING },
+      include: { user: true }
+    });
+    res.json(riders);
+  },
+
+  async orders(_req: Request, res: Response) {
+    const orders = await prisma.order.findMany({
+      include: {
+        customer: true,
+        restaurant: true,
+        delivery: {
+          include: {
+            riderProfile: {
+              include: {
+                user: true
+              }
+            }
+          }
+        },
+        payment: true,
+        settlement: true,
+        etaPredictions: {
+          orderBy: { predictedAt: "desc" },
+          take: 1
+        }
+      },
+      orderBy: { placedAt: "desc" }
+    } as any);
+
+    res.json(orders);
+  },
+
+  async nearbyRiders(req: Request, res: Response) {
+    const orderId = String(req.params.orderId);
+    const order = await prisma.order.findUnique({
+      where: { id: orderId },
+      include: { restaurant: true, deliveryAddress: true }
+    });
+
+    if (!order) {
+      return res.status(404).json({ message: "Order not found." });
+    }
+
+    const riders = await prisma.riderProfile.findMany({
+      where: {
+        approvalStatus: ApprovalStatus.APPROVED,
+        isOnline: true,
+        currentLatitude: { not: null },
+        currentLongitude: { not: null }
+      },
+      include: { user: true }
+    });
+
+    const nearby = riders
+      .map((rider) => {
+        const restaurantDistanceKm =
+          typeof rider.currentLatitude === "number" && typeof rider.currentLongitude === "number"
+            ? distanceInKm(order.restaurant.latitude, order.restaurant.longitude, rider.currentLatitude, rider.currentLongitude)
+            : Number.POSITIVE_INFINITY;
+        const customerDistanceKm =
+          typeof rider.currentLatitude === "number" && typeof rider.currentLongitude === "number"
+            ? distanceInKm(order.deliveryAddress.latitude, order.deliveryAddress.longitude, rider.currentLatitude, rider.currentLongitude)
+            : Number.POSITIVE_INFINITY;
+
+        return {
+          id: rider.id,
+          isOnline: rider.isOnline,
+          vehicleType: rider.vehicleType,
+          currentLatitude: rider.currentLatitude,
+          currentLongitude: rider.currentLongitude,
+          user: rider.user,
+          restaurantDistanceKm: Number(restaurantDistanceKm.toFixed(2)),
+          customerDistanceKm: Number(customerDistanceKm.toFixed(2))
+        };
+      })
+      .sort((a, b) => a.restaurantDistanceKm - b.restaurantDistanceKm)
+      .slice(0, 8);
+
+    res.json(nearby);
+  },
+
+  async assignRider(req: Request, res: Response) {
+    const orderId = String(req.params.orderId);
+    const riderProfileId = String(req.body.riderProfileId);
+    const rider = await prisma.riderProfile.findUnique({
+      where: { id: riderProfileId },
+      include: { user: true }
+    });
+
+    if (!rider || rider.approvalStatus !== ApprovalStatus.APPROVED || !rider.isOnline) {
+      return res.status(400).json({ message: "Selected rider is not available for assignment." });
+    }
+
+    const delivery = await prisma.delivery.upsert({
+      where: { orderId },
+      update: {
+        riderProfileId,
+        status: DeliveryStatus.ASSIGNED
+      },
+      create: {
+        orderId,
+        riderProfileId,
+        status: DeliveryStatus.ASSIGNED
+      },
+      include: {
+        riderProfile: {
+          include: { user: true }
+        }
+      }
+    });
+
+    await Promise.all([
+      createDeliveryEvent({
+        orderId,
+        deliveryStatus: delivery.status,
+        actorRole: UserRole.ADMIN,
+        description: `Admin assigned ${rider.user.firstName} ${rider.user.lastName} to this delivery.`
+      }),
+      upsertEtaPrediction(orderId),
+      prisma.notification.create({
+        data: {
+          userId: rider.userId,
+          title: "New delivery assignment",
+          body: "A nearby BiteHub order has been assigned to you.",
+          payload: { orderId, deliveryId: delivery.id, type: "RIDER_ASSIGNMENT" }
+        }
+      })
+    ]);
+
+    emitOrderUpdate(orderId, {
+      orderId,
+      deliveryId: delivery.id,
+      deliveryStatus: delivery.status,
+      riderId: riderProfileId
+    });
+
+    res.json(delivery);
+  },
+
+  async approveVendor(req: Request, res: Response) {
+    const vendorId = String(req.params.vendorId);
+    const vendor = await prisma.vendorProfile.update({
+      where: { id: vendorId },
+      data: { approvalStatus: ApprovalStatus.APPROVED }
+    });
+
+    res.json(vendor);
+  },
+
+  async approveRider(req: Request, res: Response) {
+    const riderId = String(req.params.riderId);
+    const rider = await prisma.riderProfile.update({
+      where: { id: riderId },
+      data: { approvalStatus: ApprovalStatus.APPROVED }
+    });
+
+    res.json(rider);
+  },
+
+  async categories(_req: Request, res: Response) {
+    const categories = await prisma.category.findMany({
+      orderBy: { name: "asc" }
+    });
+
+    res.json(categories);
+  },
+
+  async restaurantsCatalog(_req: Request, res: Response) {
+    const restaurants = await prisma.restaurant.findMany({
+      include: {
+        vendorProfile: {
+          include: {
+            user: true
+          }
+        },
+        category: true,
+        orders: {
+          include: {
+            payment: true
+          }
+        },
+        menuItems: {
+          include: {
+            dietaryTags: {
+              include: { dietaryTag: true }
+            }
+          }
+        },
+        collectionPlacements: {
+          include: { collection: true },
+          orderBy: { sortOrder: "asc" }
+        }
+      },
+      orderBy: [{ isFeatured: "desc" }, { name: "asc" }]
+    });
+
+    res.json(restaurants);
+  },
+
+  async updateRestaurantStatus(req: Request, res: Response) {
+    const restaurantId = String(req.params.restaurantId);
+    const restaurant = await prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: {
+        status: req.body.status as RestaurantStatus
+      }
+    });
+
+    res.json(restaurant);
+  },
+
+  async createCategory(req: Request, res: Response) {
+    const category = await prisma.category.create({ data: req.body });
+    res.status(201).json(category);
+  },
+
+  async updateCategory(req: Request, res: Response) {
+    const categoryId = String(req.params.categoryId);
+    const category = await prisma.category.update({
+      where: { id: categoryId },
+      data: req.body
+    });
+
+    res.json(category);
+  },
+
+  async deleteCategory(req: Request, res: Response) {
+    const categoryId = String(req.params.categoryId);
+    await prisma.category.delete({
+      where: { id: categoryId }
+    });
+
+    res.status(204).send();
+  },
+
+  async collections(_req: Request, res: Response) {
+    const collections = await prisma.restaurantCollection.findMany({
+      include: {
+        restaurants: {
+          include: {
+            restaurant: {
+              include: {
+                category: true
+              }
+            }
+          },
+          orderBy: { sortOrder: "asc" }
+        }
+      },
+      orderBy: [{ updatedAt: "desc" }, { name: "asc" }]
+    });
+
+    res.json(collections);
+  },
+
+  async createCollection(req: Request, res: Response) {
+    const { restaurantIds = [], ...collectionData } = req.body as {
+      restaurantIds?: string[];
+      name: string;
+      slug: string;
+      description?: string;
+      heroTitle?: string;
+      heroCopy?: string;
+      isFeatured?: boolean;
+    };
+
+    const collection = await prisma.restaurantCollection.create({
+      data: {
+        ...collectionData,
+        restaurants: {
+          create: restaurantIds.map((restaurantId, index) => ({
+            restaurantId,
+            sortOrder: index
+          }))
+        }
+      },
+      include: {
+        restaurants: {
+          include: { restaurant: true },
+          orderBy: { sortOrder: "asc" }
+        }
+      }
+    });
+
+    res.status(201).json(collection);
+  },
+
+  async updateCollection(req: Request, res: Response) {
+    const collectionId = String(req.params.collectionId);
+    const { restaurantIds = [], ...collectionData } = req.body as {
+      restaurantIds?: string[];
+      name?: string;
+      slug?: string;
+      description?: string;
+      heroTitle?: string;
+      heroCopy?: string;
+      isFeatured?: boolean;
+    };
+
+    const collection = await prisma.restaurantCollection.update({
+      where: { id: collectionId },
+      data: {
+        ...collectionData,
+        restaurants: {
+          deleteMany: {},
+          create: restaurantIds.map((restaurantId, index) => ({
+            restaurantId,
+            sortOrder: index
+          }))
+        }
+      },
+      include: {
+        restaurants: {
+          include: { restaurant: true },
+          orderBy: { sortOrder: "asc" }
+        }
+      }
+    });
+
+    res.json(collection);
+  },
+
+  async updateRestaurantStory(req: Request, res: Response) {
+    const restaurantId = String(req.params.restaurantId);
+    const restaurant = await prisma.restaurant.update({
+      where: { id: restaurantId },
+      data: req.body
+    });
+
+    res.json(restaurant);
+  },
+
+  async revenueReport(_req: Request, res: Response) {
+    const [payments, settings, activeSubscriptions] = (await Promise.all([
+      prisma.payment.findMany({
+        where: { status: "PAID" },
+        include: {
+          order: {
+            include: {
+              settlement: true
+            }
+          }
+        }
+      } as any),
+      getPlatformSettingsRecord(),
+      prisma.subscription.findMany({
+        where: { status: SubscriptionStatus.ACTIVE }
+      })
+    ])) as [any[], any, any[]];
+
+    const grossOrderValue = payments.reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const settlements = payments.map((payment) =>
+      payment.order.settlement ??
+      calculateSettlementBreakdown({
+        subtotalAmount: payment.order.subtotalAmount,
+        deliveryFee: payment.order.deliveryFee,
+        totalAmount: payment.order.totalAmount,
+        vendorCommissionRate: settings.vendorCommissionRate,
+        riderCommissionRate: settings.riderCommissionRate,
+        serviceFeeRate: settings.serviceFeeRate,
+        taxRate: settings.taxRate
+      })
+    );
+    const orderCommissionRevenue = settlements.reduce(
+      (sum, settlement) => sum + Number(settlement.vendorCommissionAmount ?? 0),
+      0
+    );
+    const deliveryPlatformRevenue = settlements.reduce(
+      (sum, settlement) => sum + Number(settlement.deliveryPlatformFeeAmount ?? 0),
+      0
+    );
+    const serviceFeeRevenue = settlements.reduce(
+      (sum, settlement) => sum + Number(settlement.serviceFeeAmount ?? 0),
+      0
+    );
+    const taxPayable = settlements.reduce((sum, settlement) => sum + Number(settlement.taxAmount ?? 0), 0);
+    const subscriptionRevenue = activeSubscriptions.reduce(
+      (sum, subscription) => sum + Number(subscription.monthlyPrice),
+      0
+    );
+    const platformRevenue =
+      orderCommissionRevenue + deliveryPlatformRevenue + serviceFeeRevenue + subscriptionRevenue;
+
+    res.json({
+      revenue: platformRevenue,
+      transactions: payments.length,
+      grossOrderValue,
+      orderCommissionRevenue,
+      deliveryPlatformRevenue,
+      serviceFeeRevenue,
+      subscriptionRevenue,
+      taxPayable
+    });
+  },
+
+  async retentionReport(_req: Request, res: Response) {
+    const [activeSubscriptions, liveMealPlans, openGroupOrders, activeScheduledOrders, loyaltyWallets] =
+      await Promise.all([
+        prisma.subscription.count({ where: { status: SubscriptionStatus.ACTIVE } }),
+        prisma.mealPlan.count(),
+        prisma.groupOrder.count({ where: { status: { in: [GroupOrderStatus.OPEN, GroupOrderStatus.LOCKED] } } }),
+        prisma.scheduledOrder.count({ where: { status: ScheduledOrderStatus.ACTIVE } }),
+        prisma.loyaltyWallet.findMany()
+      ]);
+
+    const averagePoints =
+      loyaltyWallets.length > 0
+        ? Math.round(loyaltyWallets.reduce((sum, wallet) => sum + wallet.pointsBalance, 0) / loyaltyWallets.length)
+        : 0;
+
+    res.json({
+      activeSubscriptions,
+      liveMealPlans,
+      openGroupOrders,
+      activeScheduledOrders,
+      loyaltyMembers: loyaltyWallets.length,
+      averagePoints
+    });
+  },
+
+  async settlementPreview(_req: Request, res: Response) {
+    const preview = await buildSettlementPreview();
+    res.json(preview);
+  },
+
+  async createSettlementBatch(req: Request, res: Response) {
+    const preview = await buildSettlementPreview();
+    const target = String(req.body.target);
+    const vendors = target === "RIDERS" ? [] : preview.vendors.filter((item: any) => item.eligible);
+    const riders = target === "VENDORS" ? [] : preview.riders.filter((item: any) => item.eligible);
+    const totalAmount =
+      vendors.reduce((sum: number, item: any) => sum + item.totalAmount, 0) +
+      riders.reduce((sum: number, item: any) => sum + item.totalAmount, 0);
+
+    const batch = await prisma.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: "SETTLEMENT_BATCH_CREATED",
+        entityType: "SETTLEMENT_BATCH",
+        entityId: `settlement-${Date.now()}`,
+        metadata: {
+          target,
+          totalAmount: Number(totalAmount.toFixed(2)),
+          payoutDelayDays: preview.settings.payoutDelayDays,
+          minimumPayoutAmount: preview.settings.minimumPayoutAmount,
+          vendorCount: vendors.length,
+          riderCount: riders.length,
+          vendors,
+          riders
+        }
+      }
+    });
+
+    res.status(201).json({
+      created: true,
+      batch
+    });
+  },
+
+  async operationsIntelligence(_req: Request, res: Response) {
+    const [heatmap, qualityScores, forecasts, riderIncentives] = await Promise.all([
+      prisma.marketHeatmap.findMany({
+        orderBy: [{ demandLevel: "desc" }, { updatedAt: "desc" }],
+        take: 8
+      }),
+      prisma.qualityScore.findMany({
+        include: {
+          restaurant: true,
+          vendorProfile: true,
+          riderProfile: { include: { user: true } }
+        },
+        orderBy: { measuredAt: "desc" },
+        take: 10
+      }),
+      prisma.forecastSnapshot.findMany({
+        include: { restaurant: true },
+        orderBy: [{ forecastDate: "asc" }, { createdAt: "desc" }],
+        take: 10
+      }),
+      prisma.riderIncentive.count({
+        where: { isActive: true }
+      })
+    ]);
+
+    res.json({
+      heatmap,
+      qualityScores,
+      forecasts,
+      activeRiderIncentives: riderIncentives
+    });
+  },
+
+  async supportTickets(_req: Request, res: Response) {
+    const tickets = await prisma.supportTicket.findMany({
+      include: {
+        order: { include: { restaurant: true, customer: true } }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    res.json(tickets);
+  },
+
+  async trustOverview(_req: Request, res: Response) {
+    const [tickets, busyRestaurants, riskyEtas] = await Promise.all([
+      prisma.supportTicket.count({
+        where: {
+          status: { in: ["OPEN", "IN_REVIEW"] }
+        }
+      }),
+      prisma.restaurant.count({
+        where: {
+          operatingMode: { in: ["BUSY", "PAUSED"] }
+        }
+      }),
+      prisma.etaPrediction.count({
+        where: {
+          confidencePercent: { lt: 80 }
+        }
+      })
+    ]);
+
+    res.json({
+      openSupportTickets: tickets,
+      stressedRestaurants: busyRestaurants,
+      lowConfidenceEtas: riskyEtas
+    });
+  },
+
+  async settings(_req: Request, res: Response) {
+    const settings = await getPlatformSettingsRecord();
+    res.json(settings);
+  },
+
+  async updateSettings(req: Request, res: Response) {
+    const plans = req.body.subscriptions as Array<{
+      id?: string;
+      name: string;
+      code: string;
+      audienceLabel: string;
+      monthlyPrice: number;
+      yearlyPrice?: number | null;
+      orderCommissionRate: number;
+      deliveryCommissionRate: number;
+      benefitsSummary: string;
+      isActive: boolean;
+      sortOrder: number;
+    }>;
+
+    const settings = await platformSettingsDelegate.platformSettings.upsert({
+      where: { key: "DEFAULT" },
+      update: {
+        dispatchMode: req.body.dispatchMode as DispatchMode,
+        supportEmail: req.body.supportEmail,
+        paymentMethods: req.body.paymentMethods as PaymentMethod[],
+        vendorCommissionRate: req.body.vendorCommissionRate,
+        riderCommissionRate: req.body.riderCommissionRate,
+        serviceFeeRate: req.body.serviceFeeRate,
+        taxRate: req.body.taxRate,
+        payoutDelayDays: req.body.payoutDelayDays,
+        minimumPayoutAmount: req.body.minimumPayoutAmount,
+        platformSubscriptionEnabled: req.body.platformSubscriptionEnabled,
+        defaultTrialDays: req.body.defaultTrialDays,
+        subscriptions: {
+          deleteMany: {},
+          create: plans.map((plan) => ({
+            name: plan.name,
+            code: plan.code.trim().toUpperCase(),
+            audienceLabel: plan.audienceLabel,
+            monthlyPrice: plan.monthlyPrice,
+            yearlyPrice: plan.yearlyPrice ?? null,
+            orderCommissionRate: plan.orderCommissionRate,
+            deliveryCommissionRate: plan.deliveryCommissionRate,
+            benefitsSummary: plan.benefitsSummary,
+            isActive: plan.isActive,
+            sortOrder: plan.sortOrder
+          }))
+        }
+      },
+      create: {
+        key: "DEFAULT",
+        dispatchMode: req.body.dispatchMode as DispatchMode,
+        supportEmail: req.body.supportEmail,
+        paymentMethods: req.body.paymentMethods as PaymentMethod[],
+        vendorCommissionRate: req.body.vendorCommissionRate,
+        riderCommissionRate: req.body.riderCommissionRate,
+        serviceFeeRate: req.body.serviceFeeRate,
+        taxRate: req.body.taxRate,
+        payoutDelayDays: req.body.payoutDelayDays,
+        minimumPayoutAmount: req.body.minimumPayoutAmount,
+        platformSubscriptionEnabled: req.body.platformSubscriptionEnabled,
+        defaultTrialDays: req.body.defaultTrialDays,
+        subscriptions: {
+          create: plans.map((plan) => ({
+            name: plan.name,
+            code: plan.code.trim().toUpperCase(),
+            audienceLabel: plan.audienceLabel,
+            monthlyPrice: plan.monthlyPrice,
+            yearlyPrice: plan.yearlyPrice ?? null,
+            orderCommissionRate: plan.orderCommissionRate,
+            deliveryCommissionRate: plan.deliveryCommissionRate,
+            benefitsSummary: plan.benefitsSummary,
+            isActive: plan.isActive,
+            sortOrder: plan.sortOrder
+          }))
+        }
+      },
+      include: {
+        subscriptions: {
+          orderBy: { sortOrder: "asc" }
+        }
+      }
+    });
+
+    res.json({
+      saved: true,
+      settings
+    });
+  }
+};

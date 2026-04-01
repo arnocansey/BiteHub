@@ -1,0 +1,791 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  VENDOR
+  RIDER
+  ADMIN
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum RestaurantStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum MenuItemStatus {
+  AVAILABLE
+  OUT_OF_STOCK
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  PREPARING
+  READY_FOR_PICKUP
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum DeliveryStatus {
+  PENDING
+  ASSIGNED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  FAILED
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  MOBILE_MONEY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  SMS
+  IN_APP
+}
+
+enum OperatingMode {
+  LIVE
+  BUSY
+  PAUSED
+}
+
+enum IssueSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum SupportTicketStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum SupportTicketSource {
+  CUSTOMER
+  VENDOR
+  RIDER
+  ADMIN
+  SYSTEM
+}
+
+enum DeliveryProofType {
+  PHOTO
+  OTP
+  SIGNATURE
+  NOTE
+}
+
+enum GroupOrderStatus {
+  OPEN
+  LOCKED
+  CHECKED_OUT
+  CANCELLED
+}
+
+enum ScheduledOrderStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+  EXPIRED
+}
+
+enum DispatchMode {
+  AUTO
+  MANUAL
+}
+
+model User {
+  id              String           @id @default(cuid())
+  email           String           @unique
+  phone           String?          @unique
+  passwordHash    String
+  firstName       String
+  lastName        String
+  role            UserRole
+  isActive        Boolean          @default(true)
+  lastLoginAt     DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  customerProfile CustomerProfile?
+  vendorProfile   VendorProfile?
+  riderProfile    RiderProfile?
+  adminProfile    AdminProfile?
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  favorites       Favorite[]
+  reviews         Review[]
+  orders          Order[]          @relation("CustomerOrders")
+  addresses       Address[]
+  passwordResetTokens PasswordResetToken[]
+}
+
+model CustomerProfile {
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  defaultAddress String?
+  latitude       Float?
+  longitude      Float?
+  user           User     @relation(fields: [userId], references: [id])
+  carts          Cart[]
+  loyaltyWallet  LoyaltyWallet?
+  groupOrders    GroupOrder[] @relation("GroupOrderOwner")
+  groupMemberships GroupOrderMember[]
+  scheduledOrders ScheduledOrder[]
+  mealPlans      MealPlan[]
+  subscriptions  Subscription[]
+}
+
+model VendorProfile {
+  id             String         @id @default(cuid())
+  userId         String         @unique
+  businessName   String
+  approvalStatus ApprovalStatus @default(PENDING)
+  autoAcceptOrders    Boolean   @default(false)
+  notifyOnNewOrders   Boolean   @default(true)
+  notifyOnPromotions  Boolean   @default(false)
+  payoutAccount  String?
+  payoutBankName      String?
+  payoutAccountNumber String?
+  payoutAccountName   String?
+  payoutVerified      Boolean   @default(false)
+  user           User           @relation(fields: [userId], references: [id])
+  restaurants    Restaurant[]
+  qualityScores  QualityScore[]
+}
+
+model RiderProfile {
+  id               String         @id @default(cuid())
+  userId           String         @unique
+  approvalStatus   ApprovalStatus @default(PENDING)
+  isOnline         Boolean        @default(false)
+  vehicleType      String?
+  currentLatitude  Float?
+  currentLongitude Float?
+  user             User           @relation(fields: [userId], references: [id])
+  deliveries       Delivery[]
+  incentives       RiderIncentive[]
+  qualityScores    QualityScore[]
+}
+
+model AdminProfile {
+  id           String  @id @default(cuid())
+  userId       String  @unique
+  title        String?
+  isSuperAdmin Boolean @default(false)
+  user         User    @relation(fields: [userId], references: [id])
+}
+
+model Category {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  slug        String       @unique
+  imageUrl    String?
+  createdAt   DateTime     @default(now())
+  restaurants Restaurant[]
+  menuItems   MenuItem[]
+}
+
+model Restaurant {
+  id                    String           @id @default(cuid())
+  vendorProfileId       String
+  categoryId            String?
+  name                  String
+  slug                  String           @unique
+  description           String?
+  address               String
+  latitude              Float
+  longitude             Float
+  coverImageUrl         String?
+  logoUrl               String?
+  storyHeadline         String?
+  storyBody             String?
+  chefNote              String?
+  ambianceNote          String?
+  priceBand             String?
+  heroAccent            String?
+  isFeatured            Boolean          @default(false)
+  averageRating         Float            @default(0)
+  deliveryFee           Decimal          @db.Decimal(10, 2)
+  minimumOrderAmount    Decimal          @db.Decimal(10, 2)
+  estimatedDeliveryMins Int
+  status                RestaurantStatus @default(ACTIVE)
+  operatingMode         OperatingMode    @default(LIVE)
+  busyUntil             DateTime?
+  pauseReason           String?
+  openingHours          Json?
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  vendorProfile         VendorProfile    @relation(fields: [vendorProfileId], references: [id])
+  category              Category?        @relation(fields: [categoryId], references: [id])
+  menuItems             MenuItem[]
+  orders                Order[]
+  favorites             Favorite[]
+  reviews               Review[]
+  carts                 Cart[]
+  supportTickets        SupportTicket[]
+  collectionPlacements  RestaurantCollectionPlacement[]
+  groupOrders           GroupOrder[]
+  scheduledOrders       ScheduledOrder[]
+  qualityScores         QualityScore[]
+  forecastSnapshots     ForecastSnapshot[]
+}
+
+model MenuItem {
+  id              String         @id @default(cuid())
+  restaurantId    String
+  categoryId      String?
+  name            String
+  description     String?
+  price           Decimal        @db.Decimal(10, 2)
+  imageUrl        String?
+  status          MenuItemStatus @default(AVAILABLE)
+  preparationMins Int            @default(20)
+  isSignature     Boolean        @default(false)
+  isFeatured      Boolean        @default(false)
+  badgeText       String?
+  spiceLevel      Int?
+  calories        Int?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  restaurant      Restaurant     @relation(fields: [restaurantId], references: [id])
+  category        Category?      @relation(fields: [categoryId], references: [id])
+  orderItems      OrderItem[]
+  cartItems       CartItem[]
+  dietaryTags     MenuItemDietaryTag[]
+}
+
+model DietaryTag {
+  id        String               @id @default(cuid())
+  name      String               @unique
+  slug      String               @unique
+  colorHex  String?
+  icon      String?
+  createdAt DateTime             @default(now())
+  menuItems MenuItemDietaryTag[]
+}
+
+model MenuItemDietaryTag {
+  id           String     @id @default(cuid())
+  menuItemId   String
+  dietaryTagId String
+  menuItem     MenuItem   @relation(fields: [menuItemId], references: [id])
+  dietaryTag   DietaryTag @relation(fields: [dietaryTagId], references: [id])
+
+  @@unique([menuItemId, dietaryTagId])
+}
+
+model RestaurantCollection {
+  id          String                         @id @default(cuid())
+  name        String
+  slug        String                         @unique
+  description String?
+  heroTitle   String?
+  heroCopy    String?
+  isFeatured  Boolean                        @default(true)
+  createdAt   DateTime                       @default(now())
+  updatedAt   DateTime                       @updatedAt
+  restaurants RestaurantCollectionPlacement[]
+}
+
+model RestaurantCollectionPlacement {
+  id           String               @id @default(cuid())
+  collectionId String
+  restaurantId String
+  sortOrder    Int                  @default(0)
+  blurb        String?
+  collection   RestaurantCollection @relation(fields: [collectionId], references: [id])
+  restaurant   Restaurant           @relation(fields: [restaurantId], references: [id])
+
+  @@unique([collectionId, restaurantId])
+  @@index([collectionId, sortOrder])
+}
+
+model Cart {
+  id                String          @id @default(cuid())
+  customerProfileId String
+  restaurantId      String
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id])
+  restaurant        Restaurant      @relation(fields: [restaurantId], references: [id])
+  items             CartItem[]
+}
+
+model CartItem {
+  id         String   @id @default(cuid())
+  cartId     String
+  menuItemId String
+  quantity   Int      @default(1)
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  cart       Cart     @relation(fields: [cartId], references: [id])
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model Address {
+  id           String   @id @default(cuid())
+  customerId   String
+  label        String
+  fullAddress  String
+  latitude     Float
+  longitude    Float
+  instructions String?
+  customer     User     @relation(fields: [customerId], references: [id])
+  orders       Order[]
+  scheduledOrders ScheduledOrder[]
+}
+
+model PromoCode {
+  id                String   @id @default(cuid())
+  code              String   @unique
+  description       String?
+  discountPercent   Float?
+  discountAmount    Decimal? @db.Decimal(10, 2)
+  maxDiscountAmount Decimal? @db.Decimal(10, 2)
+  minOrderAmount    Decimal? @db.Decimal(10, 2)
+  startsAt          DateTime
+  endsAt            DateTime
+  isActive          Boolean  @default(true)
+  orders            Order[]
+}
+
+model Order {
+  id                String        @id @default(cuid())
+  customerId        String
+  restaurantId      String
+  deliveryAddressId String
+  promoCodeId       String?
+  groupOrderId      String?
+  scheduledOrderId  String?
+  mealPlanId        String?
+  status            OrderStatus   @default(PENDING)
+  subtotalAmount    Decimal       @db.Decimal(10, 2)
+  deliveryFee       Decimal       @db.Decimal(10, 2)
+  discountAmount    Decimal       @db.Decimal(10, 2)
+  totalAmount       Decimal       @db.Decimal(10, 2)
+  paymentMethod     PaymentMethod
+  customerNotes     String?
+  placedAt          DateTime      @default(now())
+  deliveredAt       DateTime?
+  customer          User          @relation("CustomerOrders", fields: [customerId], references: [id])
+  restaurant        Restaurant    @relation(fields: [restaurantId], references: [id])
+  deliveryAddress   Address       @relation(fields: [deliveryAddressId], references: [id])
+  promoCode         PromoCode?    @relation(fields: [promoCodeId], references: [id])
+  groupOrder        GroupOrder?   @relation(fields: [groupOrderId], references: [id])
+  scheduledOrder    ScheduledOrder? @relation(fields: [scheduledOrderId], references: [id])
+  mealPlan          MealPlan?     @relation(fields: [mealPlanId], references: [id])
+  items             OrderItem[]
+  payment           Payment?
+  settlement        OrderSettlement?
+  delivery          Delivery?
+  etaPredictions    EtaPrediction[]
+  timelineEvents    OrderEvent[]
+  supportTickets    SupportTicket[]
+}
+
+model LoyaltyWallet {
+  id                String          @id @default(cuid())
+  customerProfileId String          @unique
+  pointsBalance     Int             @default(0)
+  tier              String          @default("CORE")
+  lifetimePoints    Int             @default(0)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id])
+}
+
+model GroupOrder {
+  id                String            @id @default(cuid())
+  ownerProfileId    String
+  restaurantId      String
+  inviteCode        String            @unique
+  status            GroupOrderStatus  @default(OPEN)
+  title             String
+  scheduledFor      DateTime?
+  expiresAt         DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  ownerProfile      CustomerProfile   @relation("GroupOrderOwner", fields: [ownerProfileId], references: [id])
+  restaurant        Restaurant        @relation(fields: [restaurantId], references: [id])
+  members           GroupOrderMember[]
+  orders            Order[]
+}
+
+model GroupOrderMember {
+  id                String          @id @default(cuid())
+  groupOrderId      String
+  customerProfileId String
+  displayName       String
+  subtotalAmount    Decimal         @default(0) @db.Decimal(10, 2)
+  createdAt         DateTime        @default(now())
+  groupOrder        GroupOrder      @relation(fields: [groupOrderId], references: [id])
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id])
+
+  @@unique([groupOrderId, customerProfileId])
+}
+
+model ScheduledOrder {
+  id                String               @id @default(cuid())
+  customerProfileId String
+  restaurantId      String
+  addressId         String
+  title             String
+  cadenceLabel      String
+  nextRunAt         DateTime
+  status            ScheduledOrderStatus @default(ACTIVE)
+  itemSummary       Json
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  customerProfile   CustomerProfile      @relation(fields: [customerProfileId], references: [id])
+  restaurant        Restaurant           @relation(fields: [restaurantId], references: [id])
+  address           Address              @relation(fields: [addressId], references: [id])
+  orders            Order[]
+}
+
+model MealPlan {
+  id                String          @id @default(cuid())
+  customerProfileId String
+  title             String
+  goal              String?
+  weeklyBudget      Decimal         @db.Decimal(10, 2)
+  mealsPerWeek      Int
+  cuisineFocus      String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id])
+  orders            Order[]
+}
+
+model Subscription {
+  id                String             @id @default(cuid())
+  customerProfileId String
+  name              String
+  status            SubscriptionStatus @default(ACTIVE)
+  renewsAt          DateTime?
+  monthlyPrice      Decimal            @db.Decimal(10, 2)
+  benefitsSummary   String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  customerProfile   CustomerProfile    @relation(fields: [customerProfileId], references: [id])
+}
+
+model PlatformSettings {
+  id                          String                     @id @default(cuid())
+  key                         String                     @unique @default("DEFAULT")
+  dispatchMode                DispatchMode               @default(AUTO)
+  supportEmail                String
+  paymentMethods              PaymentMethod[]
+  vendorCommissionRate        Decimal                    @default(15.00) @db.Decimal(5, 2)
+  riderCommissionRate         Decimal                    @default(2.50) @db.Decimal(5, 2)
+  serviceFeeRate              Decimal                    @default(5.00) @db.Decimal(5, 2)
+  taxRate                     Decimal                    @default(7.50) @db.Decimal(5, 2)
+  payoutDelayDays             Int                        @default(2)
+  minimumPayoutAmount         Decimal                    @default(5000.00) @db.Decimal(10, 2)
+  platformSubscriptionEnabled Boolean                    @default(true)
+  defaultTrialDays            Int                        @default(14)
+  subscriptions               PlatformSubscriptionPlan[]
+  createdAt                   DateTime                   @default(now())
+  updatedAt                   DateTime                   @updatedAt
+}
+
+model PlatformSubscriptionPlan {
+  id                      String           @id @default(cuid())
+  platformSettingsId      String
+  name                    String
+  code                    String           @unique
+  audienceLabel           String
+  monthlyPrice            Decimal          @db.Decimal(10, 2)
+  yearlyPrice             Decimal?         @db.Decimal(10, 2)
+  orderCommissionRate     Decimal          @db.Decimal(5, 2)
+  deliveryCommissionRate  Decimal          @db.Decimal(5, 2)
+  benefitsSummary         String
+  isActive                Boolean          @default(true)
+  sortOrder               Int              @default(0)
+  createdAt               DateTime         @default(now())
+  updatedAt               DateTime         @updatedAt
+  platformSettings        PlatformSettings @relation(fields: [platformSettingsId], references: [id], onDelete: Cascade)
+
+  @@index([platformSettingsId, sortOrder])
+}
+
+model OrderItem {
+  id         String   @id @default(cuid())
+  orderId    String
+  menuItemId String
+  quantity   Int
+  unitPrice  Decimal  @db.Decimal(10, 2)
+  totalPrice Decimal  @db.Decimal(10, 2)
+  order      Order    @relation(fields: [orderId], references: [id])
+  menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
+}
+
+model Payment {
+  id          String        @id @default(cuid())
+  orderId     String        @unique
+  provider    String
+  providerRef String?
+  amount      Decimal       @db.Decimal(10, 2)
+  method      PaymentMethod
+  status      PaymentStatus @default(PENDING)
+  paidAt      DateTime?
+  rawPayload  Json?
+  order       Order         @relation(fields: [orderId], references: [id])
+}
+
+model OrderSettlement {
+  id                         String   @id @default(cuid())
+  orderId                    String   @unique
+  grossAmount                Decimal  @db.Decimal(10, 2)
+  vendorGrossSales           Decimal  @db.Decimal(10, 2)
+  vendorCommissionRate       Decimal  @db.Decimal(5, 2)
+  vendorCommissionAmount     Decimal  @db.Decimal(10, 2)
+  vendorPayoutAmount         Decimal  @db.Decimal(10, 2)
+  riderGrossDelivery         Decimal  @db.Decimal(10, 2)
+  deliveryPlatformFeeRate    Decimal  @db.Decimal(5, 2)
+  deliveryPlatformFeeAmount  Decimal  @db.Decimal(10, 2)
+  riderPayoutAmount          Decimal  @db.Decimal(10, 2)
+  serviceFeeRate             Decimal  @db.Decimal(5, 2)
+  serviceFeeAmount           Decimal  @db.Decimal(10, 2)
+  taxRate                    Decimal  @db.Decimal(5, 2)
+  taxAmount                  Decimal  @db.Decimal(10, 2)
+  netPlatformRevenue         Decimal  @db.Decimal(10, 2)
+  currency                   String   @default("GHS")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+  order                      Order    @relation(fields: [orderId], references: [id])
+}
+
+model Delivery {
+  id               String         @id @default(cuid())
+  orderId          String         @unique
+  riderProfileId   String?
+  status           DeliveryStatus @default(PENDING)
+  pickupEtaMins    Int?
+  deliveryEtaMins  Int?
+  pickedUpAt       DateTime?
+  deliveredAt      DateTime?
+  currentLatitude  Float?
+  currentLongitude Float?
+  order            Order          @relation(fields: [orderId], references: [id])
+  riderProfile     RiderProfile?  @relation(fields: [riderProfileId], references: [id])
+  proofs           DeliveryProof[]
+}
+
+model ForecastSnapshot {
+  id                 String     @id @default(cuid())
+  restaurantId       String
+  forecastDate       DateTime
+  windowLabel        String
+  expectedOrders     Int
+  expectedPrepLoad   Int
+  recommendedStaff   Int
+  confidencePercent  Int
+  createdAt          DateTime   @default(now())
+  restaurant         Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@index([restaurantId, forecastDate])
+}
+
+model RiderIncentive {
+  id              String       @id @default(cuid())
+  riderProfileId  String
+  title           String
+  description     String
+  bonusAmount     Decimal      @db.Decimal(10, 2)
+  zoneLabel       String?
+  startsAt        DateTime
+  endsAt          DateTime
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  riderProfile    RiderProfile @relation(fields: [riderProfileId], references: [id])
+
+  @@index([riderProfileId, startsAt])
+}
+
+model QualityScore {
+  id              String         @id @default(cuid())
+  vendorProfileId String?
+  riderProfileId  String?
+  restaurantId    String?
+  scoreType       String
+  scoreValue      Float
+  trend           String?
+  notes           String?
+  measuredAt      DateTime       @default(now())
+  vendorProfile   VendorProfile? @relation(fields: [vendorProfileId], references: [id])
+  riderProfile    RiderProfile?  @relation(fields: [riderProfileId], references: [id])
+  restaurant      Restaurant?    @relation(fields: [restaurantId], references: [id])
+
+  @@index([scoreType, measuredAt])
+}
+
+model MarketHeatmap {
+  id                String   @id @default(cuid())
+  zoneLabel         String   @unique
+  demandLevel       Int
+  supplyLevel       Int
+  averageEtaMinutes Int
+  activeOrders      Int
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model EtaPrediction {
+  id                 String   @id @default(cuid())
+  orderId            String
+  predictedAt        DateTime @default(now())
+  etaMinutes         Int
+  confidencePercent  Int
+  delayReason        String?
+  prepOffsetMinutes  Int      @default(0)
+  trafficOffsetMins  Int      @default(0)
+  riderOffsetMins    Int      @default(0)
+  order              Order    @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, predictedAt])
+}
+
+model OrderEvent {
+  id          String   @id @default(cuid())
+  orderId     String
+  status      OrderStatus?
+  title       String
+  description String?
+  actorRole   UserRole?
+  actorId     String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  order       Order    @relation(fields: [orderId], references: [id])
+
+  @@index([orderId, createdAt])
+}
+
+model SupportTicket {
+  id             String              @id @default(cuid())
+  orderId        String
+  restaurantId   String?
+  requesterId    String
+  source         SupportTicketSource
+  status         SupportTicketStatus @default(OPEN)
+  severity       IssueSeverity       @default(MEDIUM)
+  subject        String
+  message        String
+  resolutionNote String?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  order          Order               @relation(fields: [orderId], references: [id])
+  restaurant     Restaurant?         @relation(fields: [restaurantId], references: [id])
+
+  @@index([orderId, createdAt])
+  @@index([requesterId, createdAt])
+}
+
+model DeliveryProof {
+  id             String            @id @default(cuid())
+  deliveryId     String
+  proofType      DeliveryProofType
+  imageUrl       String?
+  note           String?
+  otpCode        String?
+  capturedById   String
+  capturedAt     DateTime          @default(now())
+  delivery       Delivery          @relation(fields: [deliveryId], references: [id])
+
+  @@index([deliveryId, capturedAt])
+}
+
+model Favorite {
+  id           String     @id @default(cuid())
+  userId       String
+  restaurantId String
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id])
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+
+  @@unique([userId, restaurantId])
+}
+
+model Review {
+  id           String     @id @default(cuid())
+  userId       String
+  restaurantId String
+  rating       Int
+  comment      String?
+  createdAt    DateTime   @default(now())
+  user         User       @relation(fields: [userId], references: [id])
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id])
+}
+
+model Notification {
+  id        String              @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  channel   NotificationChannel @default(IN_APP)
+  isRead    Boolean             @default(false)
+  payload   Json?
+  createdAt DateTime            @default(now())
+  user      User                @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}

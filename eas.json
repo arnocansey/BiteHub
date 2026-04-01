@@ -1,0 +1,38 @@
+{
+  "cli": {
+    "version": ">= 10.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+    },
+    "customer-production": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_VARIANT": "customer"
+      }
+    },
+    "vendor-production": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_VARIANT": "vendor"
+      }
+    },
+    "rider-production": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_VARIANT": "rider"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
