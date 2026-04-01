@@ -28,6 +28,10 @@ export const createApp = () => {
     })
   );
 
+  app.get("/", (_req, res) => {
+    res.json({ status: "ok", service: "bitehub-backend", path: "/" });
+  });
+
   app.get("/health", (_req, res) => {
     res.json({ status: "ok", service: "bitehub-backend" });
   });

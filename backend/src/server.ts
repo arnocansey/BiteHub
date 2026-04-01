@@ -8,6 +8,6 @@ const server = createServer(app);
 
 initSocket(server);
 
-server.listen(env.port, () => {
-  console.log(`BiteHub backend running on port ${env.port}`);
+server.listen(env.port, "0.0.0.0", () => {
+  console.log(`BiteHub backend running on 0.0.0.0:${env.port}`);
 });
