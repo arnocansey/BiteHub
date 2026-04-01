@@ -60,5 +60,11 @@ export const env = {
   paystackWebhookSecret: process.env.PAYSTACK_WEBHOOK_SECRET ?? "",
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
   clientAppUrl: process.env.CLIENT_APP_URL ?? "exp://localhost:8081",
-  adminDashboardUrl: process.env.ADMIN_DASHBOARD_URL ?? "http://localhost:3000"
+  adminDashboardUrl: process.env.ADMIN_DASHBOARD_URL ?? "http://localhost:3000",
+  smtpHost: process.env.SMTP_HOST ?? "",
+  smtpPort: Number(process.env.SMTP_PORT ?? 587),
+  smtpSecure: String(process.env.SMTP_SECURE ?? "false").toLowerCase() === "true",
+  smtpUser: process.env.SMTP_USER ?? "",
+  smtpPass: process.env.SMTP_PASS ?? "",
+  smtpFrom: process.env.SMTP_FROM ?? ""
 };

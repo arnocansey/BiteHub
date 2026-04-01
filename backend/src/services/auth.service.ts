@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { UserRole } from "../generated/prisma/client";
 import { env } from "../config/env";
 import { prisma } from "../config/prisma";
+import { sendPasswordResetEmail } from "./mail.service";
 import { ApiError } from "../utils/api-error";
 import {
   signAccessToken,
@@ -177,9 +178,17 @@ export const authService = {
       }
     });
 
+    const mailResult = await sendPasswordResetEmail({
+      to: user.email,
+      firstName: user.firstName,
+      resetToken: reset.token
+    });
+
     return {
-      message: "Password reset instructions created.",
-      ...(env.nodeEnv === "production" ? {} : { resetToken: reset.token })
+      message: mailResult.delivered
+        ? "Password reset instructions sent."
+        : "Password reset instructions created, but SMTP is not configured yet.",
+      ...(env.nodeEnv === "production" ? {} : { resetToken: reset.token, resetUrl: mailResult.resetUrl })
     };
   },
 

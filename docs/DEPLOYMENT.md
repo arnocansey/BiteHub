@@ -11,6 +11,7 @@
 - Included deployment options:
   - Docker image via [backend/Dockerfile](/c:/Users/arnoc/Desktop/Website%20Projects%202026/BiteHub/backend/Dockerfile)
   - Render service via [render.yaml](/c:/Users/arnoc/Desktop/Website%20Projects%202026/BiteHub/render.yaml)
+  - Railway Node service using the `backend` folder as the service root
 
 Recommended production env:
 - `NODE_ENV=production`
@@ -22,6 +23,47 @@ Recommended production env:
 - `GOOGLE_MAPS_API_KEY`
 - `CLIENT_APP_URL`
 - `ADMIN_DASHBOARD_URL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+
+## Railway Backend
+
+- Create a new Railway project and deploy from the `BiteHub` repo
+- Set the service root to `backend`
+- Start command: `npm run start`
+- Install command: `npm install`
+- Add a PostgreSQL database plugin or point `DATABASE_URL` to your external Postgres
+- Run migrations after deploy with `npm run prisma:deploy`
+
+Suggested Railway env values:
+- `NODE_ENV=production`
+- `PORT=4000`
+- `DATABASE_URL`
+- `JWT_ACCESS_SECRET`
+- `JWT_REFRESH_SECRET`
+- `JWT_ACCESS_TTL=12h`
+- `JWT_REFRESH_TTL=90d`
+- `PAYSTACK_SECRET_KEY`
+- `PAYSTACK_WEBHOOK_SECRET`
+- `GOOGLE_MAPS_API_KEY`
+- `CLIENT_APP_URL`
+- `ADMIN_DASHBOARD_URL`
+- `SMTP_HOST`
+- `SMTP_PORT`
+- `SMTP_SECURE`
+- `SMTP_USER`
+- `SMTP_PASS`
+- `SMTP_FROM`
+
+SMTP notes for Railway:
+- Railway supports outbound SMTP connections
+- Use an external SMTP provider such as Brevo, SendGrid, Mailgun, Zoho, or another transactional mail provider
+- Password reset emails now use SMTP when configured
+- If SMTP is missing, the API still creates reset tokens, but email delivery is skipped
 
 ## Admin Dashboard
 
