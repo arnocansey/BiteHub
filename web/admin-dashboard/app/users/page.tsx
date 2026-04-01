@@ -18,6 +18,12 @@ type UserRecord = {
   adminProfile?: object | null;
 };
 
+function getPromotionLabel(user: UserRecord) {
+  if (user.role === "RIDER" || user.riderProfile) return "Promote to Admin Rider";
+  if (user.role === "VENDOR" || user.vendorProfile) return "Promote to Admin Vendor";
+  return "Promote to Admin Customer";
+}
+
 export default function UsersPage() {
   const { session, ready } = useAdminSessionState();
   const query = useAdminData(() => adminRequest<UserRecord[]>("/admin/users"), [session?.accessToken]);
@@ -101,14 +107,14 @@ export default function UsersPage() {
                       <td className="px-4 py-3 text-slate-600">{user.email}</td>
                       <td className="px-4 py-3 text-orange-500">{user.role}</td>
                       <td className="px-4 py-3">
-                        {user.role === "CUSTOMER" ? (
+                        {user.role !== "ADMIN" ? (
                           <button
                             type="button"
                             onClick={() => void promoteUser(user.id)}
                             disabled={busyUserId === user.id}
                             className="rounded-2xl bg-orange-500 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60"
                           >
-                            {busyUserId === user.id ? "Promoting..." : "Promote to Admin"}
+                            {busyUserId === user.id ? "Promoting..." : getPromotionLabel(user)}
                           </button>
                         ) : (
                           <span className="text-xs text-slate-400">No action</span>

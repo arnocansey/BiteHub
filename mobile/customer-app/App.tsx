@@ -1,5 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
@@ -14,7 +15,25 @@ type Screen = "browse" | "menu" | "cart" | "tracking" | "confirmation";
 type AuthMode = "signin" | "signup" | "forgot";
 type PaymentMethod = "CASH" | "CARD" | "MOBILE_MONEY";
 type Session = { accessToken: string; refreshToken: string; user: { role: string; firstName: string; lastName: string; email: string } };
+type PublicDataBundle = { restaurantData: any[]; collectionData: any[] };
+type PrivateDataBundle = {
+  orderData: any[];
+  favoriteData: any[];
+  profileData: any;
+  retentionData: any;
+  addressData: any[];
+  notificationData: any[];
+};
 const sessionStorageKey = "bitehub_customer_session";
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: 1
+    }
+  }
+});
 
 function resolveApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -86,9 +105,18 @@ function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: nu
 }
 
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
+  );
+}
+
+function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const tanstackQueryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [activeScreen, setActiveScreen] = useState<Screen>("browse");
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
@@ -197,14 +225,20 @@ export default function App() {
     setAuthMessage(null);
   }
 
-  async function loadPublicData() {
+  async function fetchPublicDataBundle(): Promise<PublicDataBundle> {
     const [restaurantData, collectionData] = await Promise.all([request<any[]>("/restaurants"), request<any[]>("/collections")]);
-    setRestaurants(restaurantData);
-    setCollections(collectionData);
-    if (!selectedRestaurant && restaurantData[0]) await openRestaurant(restaurantData[0], false);
+    return { restaurantData, collectionData };
   }
 
-  async function loadPrivateData(activeSession: Session) {
+  async function applyPublicBundle(bundle: PublicDataBundle) {
+    setRestaurants(bundle.restaurantData);
+    setCollections(bundle.collectionData);
+    if (!selectedRestaurant && bundle.restaurantData[0]) {
+      await openRestaurant(bundle.restaurantData[0], false);
+    }
+  }
+
+  async function fetchPrivateDataBundle(activeSession: Session): Promise<PrivateDataBundle> {
     const [orderData, favoriteData, profileData, retentionData, addressData, notificationData] = await Promise.all([
       request<any[]>("/customers/orders", {}, activeSession),
       request<any[]>("/customers/favorites", {}, activeSession),
@@ -213,14 +247,48 @@ export default function App() {
       request<any[]>("/customers/addresses", {}, activeSession),
       request<any[]>("/notifications", {}, activeSession)
     ]);
-    setOrders(orderData);
-    setFavorites(favoriteData);
-    setProfile(profileData);
-    setRetentionOverview(retentionData);
-    setAddresses(addressData);
-    setNotifications(notificationData);
-    setSelectedAddressId((current) => current || addressData[0]?.id || "");
-    setAddressInput((current) => current || addressData[0]?.fullAddress || profileData?.customerProfile?.defaultAddress || "");
+
+    return { orderData, favoriteData, profileData, retentionData, addressData, notificationData };
+  }
+
+  function applyPrivateBundle(bundle: PrivateDataBundle) {
+    setOrders(bundle.orderData);
+    setFavorites(bundle.favoriteData);
+    setProfile(bundle.profileData);
+    setRetentionOverview(bundle.retentionData);
+    setAddresses(bundle.addressData);
+    setNotifications(bundle.notificationData);
+    setSelectedAddressId((current) => current || bundle.addressData[0]?.id || "");
+    setAddressInput(
+      (current) => current || bundle.addressData[0]?.fullAddress || bundle.profileData?.customerProfile?.defaultAddress || ""
+    );
+  }
+
+  const publicDataQuery = useQuery({
+    queryKey: ["customer-public-data"],
+    queryFn: fetchPublicDataBundle
+  });
+
+  const privateDataQuery = useQuery({
+    queryKey: ["customer-private-data", session?.user?.email ?? "guest"],
+    queryFn: () => fetchPrivateDataBundle(session!),
+    enabled: Boolean(session)
+  });
+
+  async function loadPublicData() {
+    const bundle = await tanstackQueryClient.fetchQuery({
+      queryKey: ["customer-public-data"],
+      queryFn: fetchPublicDataBundle
+    });
+    await applyPublicBundle(bundle);
+  }
+
+  async function loadPrivateData(activeSession: Session) {
+    const bundle = await tanstackQueryClient.fetchQuery({
+      queryKey: ["customer-private-data", activeSession.user.email],
+      queryFn: () => fetchPrivateDataBundle(activeSession)
+    });
+    applyPrivateBundle(bundle);
   }
 
   async function loadTracking(orderId: string) {
@@ -310,6 +378,18 @@ export default function App() {
 
     await Linking.openURL(url);
   }
+
+  useEffect(() => {
+    if (publicDataQuery.data) {
+      void applyPublicBundle(publicDataQuery.data);
+    }
+  }, [publicDataQuery.data]);
+
+  useEffect(() => {
+    if (privateDataQuery.data) {
+      applyPrivateBundle(privateDataQuery.data);
+    }
+  }, [privateDataQuery.data]);
 
   async function createSupportTicket() {
     if (!session || !trackedOrder || !supportMessage.trim()) return;

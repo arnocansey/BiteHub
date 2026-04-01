@@ -61,6 +61,10 @@ export const env = {
   googleMapsApiKey: process.env.GOOGLE_MAPS_API_KEY ?? "",
   clientAppUrl: process.env.CLIENT_APP_URL ?? "exp://localhost:8081",
   adminDashboardUrl: process.env.ADMIN_DASHBOARD_URL ?? "http://localhost:3000",
+  adminDashboardUrls: (process.env.ADMIN_DASHBOARD_URL ?? "http://localhost:3000")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean),
   smtpHost: process.env.SMTP_HOST ?? "",
   smtpPort: Number(process.env.SMTP_PORT ?? 587),
   smtpSecure: String(process.env.SMTP_SECURE ?? "false").toLowerCase() === "true",

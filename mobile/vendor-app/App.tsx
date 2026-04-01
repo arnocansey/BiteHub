@@ -1,5 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -12,7 +13,24 @@ type Tab = "dashboard" | "orders" | "menu" | "analytics" | "settings";
 type AuthMode = "signin" | "signup" | "forgot";
 type OrderFilter = "all" | "pending" | "accepted" | "preparing" | "ready" | "rejected" | "delivered";
 type Session = { accessToken: string; refreshToken: string; user: { role: string; firstName: string; lastName: string; email?: string } };
+type VendorDataBundle = {
+  dashboardData: any;
+  orderData: any[];
+  restaurantData: any[];
+  menuData: any[];
+  forecastData: any;
+  notificationData: any[];
+};
 const sessionStorageKey = "bitehub_vendor_session";
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: 1
+    }
+  }
+});
 
 function resolveApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -89,9 +107,18 @@ function normalizeOpeningHours(input: any) {
 }
 
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
+  );
+}
+
+function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const tanstackQueryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("dashboard");
   const [authMode, setAuthMode] = useState<AuthMode>("signin");
   const [orderFilter, setOrderFilter] = useState<OrderFilter>("all");
@@ -237,7 +264,7 @@ export default function App() {
     setMenuFormOpen(false);
   }
 
-  async function loadVendorData(activeSession: Session) {
+  async function fetchVendorDataBundle(activeSession: Session): Promise<VendorDataBundle> {
     const [dashboardData, orderData, restaurantData, menuData, forecastData, notificationData] = await Promise.all([
       request<any>("/vendors/dashboard", {}, activeSession),
       request<any[]>("/vendors/orders", {}, activeSession),
@@ -247,14 +274,38 @@ export default function App() {
       request<any[]>("/notifications", {}, activeSession)
     ]);
 
-    setDashboard(dashboardData);
-    setOrders(orderData);
-    setRestaurants(restaurantData);
-    setMenuItems(menuData);
-    setForecasts(forecastData);
-    setNotifications(notificationData);
-    setSelectedRestaurantId((current) => current || restaurantData[0]?.id || "");
+    return { dashboardData, orderData, restaurantData, menuData, forecastData, notificationData };
   }
+
+  function applyVendorBundle(bundle: VendorDataBundle) {
+    setDashboard(bundle.dashboardData);
+    setOrders(bundle.orderData);
+    setRestaurants(bundle.restaurantData);
+    setMenuItems(bundle.menuData);
+    setForecasts(bundle.forecastData);
+    setNotifications(bundle.notificationData);
+    setSelectedRestaurantId((current) => current || bundle.restaurantData[0]?.id || "");
+  }
+
+  const vendorDataQuery = useQuery({
+    queryKey: ["vendor-data", session?.user?.email ?? "guest"],
+    queryFn: () => fetchVendorDataBundle(session!),
+    enabled: Boolean(session)
+  });
+
+  async function loadVendorData(activeSession: Session) {
+    const bundle = await tanstackQueryClient.fetchQuery({
+      queryKey: ["vendor-data", activeSession.user.email ?? activeSession.user.firstName ?? "vendor"],
+      queryFn: () => fetchVendorDataBundle(activeSession)
+    });
+    applyVendorBundle(bundle);
+  }
+
+  useEffect(() => {
+    if (vendorDataQuery.data) {
+      applyVendorBundle(vendorDataQuery.data);
+    }
+  }, [vendorDataQuery.data]);
 
   useEffect(() => {
     void (async () => {

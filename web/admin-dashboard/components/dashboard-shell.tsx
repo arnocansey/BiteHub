@@ -33,6 +33,7 @@ export function DashboardShell({
   const superAdmin = isSuperAdmin(session);
   const [showInbox, setShowInbox] = useState(false);
   const [showDateMenu, setShowDateMenu] = useState(false);
+  const [showLogoutPrompt, setShowLogoutPrompt] = useState(false);
   const [activeRange, setActiveRange] = useState<AdminDateRange>("today");
 
   useEffect(() => {
@@ -106,9 +107,11 @@ export function DashboardShell({
   }
 
   function handleLogout() {
-    if (typeof window !== "undefined" && !window.confirm("Do you want to logout")) {
-      return;
-    }
+    setShowLogoutPrompt(true);
+  }
+
+  function confirmLogout() {
+    setShowLogoutPrompt(false);
     clearAdminSession();
     router.replace("/login");
   }
@@ -126,6 +129,34 @@ export function DashboardShell({
 
   return (
     <main className="min-h-screen bg-[#f6f6f7] p-4 md:p-6">
+      {showLogoutPrompt ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-500">Logout</p>
+            <h3 className="mt-3 text-2xl font-semibold text-slate-900">Do you want to log out?</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              You’ll be signed out of the BiteHub admin workspace and returned to the login screen.
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setShowLogoutPrompt(false)}
+                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                No, stay here
+              </button>
+              <button
+                type="button"
+                onClick={confirmLogout}
+                className="rounded-2xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-400"
+              >
+                Yes, log out
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="mx-auto grid max-w-7xl gap-5 xl:grid-cols-[260px_1fr]">
         <aside className="self-start rounded-[30px] bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto">
           <div className="flex items-center gap-4 px-2">

@@ -1,5 +1,6 @@
 import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
+import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
@@ -15,8 +16,24 @@ type AuthMode = "signin" | "signup" | "forgot";
 type ProfileScreen = "menu" | "notifications" | "help" | "privacy" | "tutorial" | "tutorial-general";
 type HomeSection = "current" | "archive" | "past";
 type Session = { accessToken: string; refreshToken: string; user: { role: string; firstName: string; lastName: string; email?: string } };
+type RiderDataBundle = {
+  profileData: any;
+  jobsData: any[];
+  earningsData: any;
+  opsData: any;
+  notificationData: any[];
+};
 const sessionStorageKey = "bitehub_rider_session";
 const riderProfileImageStorageKey = "bitehub_rider_profile_image";
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+      retry: 1
+    }
+  }
+});
 
 const generalTutorialSlides = [
   {
@@ -272,9 +289,18 @@ function BikeCourierAnimation() {
 }
 
 export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AppContent />
+    </QueryClientProvider>
+  );
+}
+
+function AppContent() {
   const [showSplash, setShowSplash] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
+  const tanstackQueryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [homeSection, setHomeSection] = useState<HomeSection>("current");
   const [profileScreen, setProfileScreen] = useState<ProfileScreen>("menu");
@@ -370,7 +396,7 @@ export default function App() {
     setAuthMessage(null);
   }
 
-  async function loadRiderData(activeSession: Session) {
+  async function fetchRiderDataBundle(activeSession: Session): Promise<RiderDataBundle> {
     const [profileData, jobsData, earningsData, opsData, notificationData] = await Promise.all([
       request<any>("/riders/profile", {}, activeSession),
       request<any[]>("/riders/jobs", {}, activeSession),
@@ -378,12 +404,37 @@ export default function App() {
       request<any>("/riders/incentives", {}, activeSession),
       request<any[]>("/notifications", {}, activeSession)
     ]);
-    setProfile(profileData);
-    setJobs(jobsData);
-    setEarnings(earningsData);
-    setOpsInsights(opsData);
-    setNotifications(notificationData);
+
+    return { profileData, jobsData, earningsData, opsData, notificationData };
   }
+
+  function applyRiderBundle(bundle: RiderDataBundle) {
+    setProfile(bundle.profileData);
+    setJobs(bundle.jobsData);
+    setEarnings(bundle.earningsData);
+    setOpsInsights(bundle.opsData);
+    setNotifications(bundle.notificationData);
+  }
+
+  const riderDataQuery = useQuery({
+    queryKey: ["rider-data", session?.user?.email ?? "guest"],
+    queryFn: () => fetchRiderDataBundle(session!),
+    enabled: Boolean(session)
+  });
+
+  async function loadRiderData(activeSession: Session) {
+    const bundle = await tanstackQueryClient.fetchQuery({
+      queryKey: ["rider-data", activeSession.user.email ?? activeSession.user.firstName ?? "rider"],
+      queryFn: () => fetchRiderDataBundle(activeSession)
+    });
+    applyRiderBundle(bundle);
+  }
+
+  useEffect(() => {
+    if (riderDataQuery.data) {
+      applyRiderBundle(riderDataQuery.data);
+    }
+  }, [riderDataQuery.data]);
 
   useEffect(() => {
     void (async () => {

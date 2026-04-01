@@ -31,19 +31,15 @@ export default function OrdersPage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<"all" | "unassigned" | "active" | "delivered">("all");
 
-  if (!ready) return <LoadingCard />;
-  if (!session) return <AuthRequiredCard message="Sign in with an admin account to view live orders." />;
-  if (!hasAdminAccess(session, "orders")) {
-    return <AccessDeniedCard message="Only Customer Service Manager accounts can access the live order board." />;
-  }
-  if (query.loading) return <LoadingCard label="Loading orders..." />;
-  if (query.error) return <ErrorCard message={query.error} />;
-
   const orders = query.data ?? [];
   const filteredOrders = useMemo(() => {
     if (activeFilter === "all") return orders;
     if (activeFilter === "unassigned") return orders.filter((order) => !order.delivery?.riderProfile);
-    if (activeFilter === "active") return orders.filter((order) => ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status));
+    if (activeFilter === "active") {
+      return orders.filter((order) =>
+        ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
+      );
+    }
     return orders.filter((order) => order.status === "DELIVERED");
   }, [activeFilter, orders]);
   const summary = {
@@ -52,6 +48,14 @@ export default function OrdersPage() {
     transit: orders.filter((order) => order.status === "IN_TRANSIT").length,
     delivered: orders.filter((order) => order.status === "DELIVERED").length
   };
+
+  if (!ready) return <LoadingCard />;
+  if (!session) return <AuthRequiredCard message="Sign in with an admin account to view live orders." />;
+  if (!hasAdminAccess(session, "orders")) {
+    return <AccessDeniedCard message="Only Customer Service Manager accounts can access the live order board." />;
+  }
+  if (query.loading) return <LoadingCard label="Loading orders..." />;
+  if (query.error) return <ErrorCard message={query.error} />;
 
   async function loadNearbyRiders(orderId: string) {
     setBusyOrderId(orderId);

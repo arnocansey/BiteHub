@@ -9,9 +9,26 @@ import { errorMiddleware } from "./middlewares/error.middleware";
 
 export const createApp = () => {
   const app = express();
+  const allowedOrigins = new Set(env.adminDashboardUrls);
 
   app.use(helmet());
-  app.use(cors({ origin: [env.adminDashboardUrl] }));
+  app.use(
+    cors({
+      origin(origin, callback) {
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        if (allowedOrigins.has(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`Origin ${origin} is not allowed by CORS`));
+      }
+    })
+  );
   app.use(
     express.json({
       limit: "2mb",

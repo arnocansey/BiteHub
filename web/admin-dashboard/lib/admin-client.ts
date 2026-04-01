@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 
 export type AdminSession = {
   accessToken: string;
@@ -170,27 +171,23 @@ export function useAdminSessionState() {
 }
 
 export function useAdminData<T>(loader: () => Promise<T>, deps: unknown[] = []) {
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryKey = useMemo(() => ["admin-data", ...deps.map((dep) => String(dep ?? "null"))], deps);
+  const query = useQuery({
+    queryKey,
+    queryFn: loader,
+    retry: 1
+  });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const result = await loader();
-      setData(result);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
+  return {
+    data: query.data ?? null,
+    loading: query.isPending,
+    error: query.error instanceof Error ? query.error.message : null,
+    refresh: async () => {
+      const result = await query.refetch();
+      if (result.error) {
+        throw result.error;
+      }
+      return result.data ?? null;
     }
-  }, deps);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  return { data, loading, error, refresh: load };
+  };
 }
