@@ -1,6 +1,5 @@
 {
   "framework": "nextjs",
   "installCommand": "npm install",
-  "buildCommand": "npm --prefix web/admin-dashboard run build"
+  "buildCommand": "npm run build"
 }
-
