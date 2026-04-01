@@ -79,14 +79,6 @@ export default function RidersPage() {
     await query.refresh();
   }
 
-  if (!ready) return <LoadingCard />;
-  if (!session) return <AuthRequiredCard message="Sign in with an admin account to manage riders." />;
-  if (!hasAdminAccess(session, "riders")) {
-    return <AccessDeniedCard message="Your manager role does not have access to the rider workspace." />;
-  }
-  if (query.loading) return <LoadingCard label="Loading riders..." />;
-  if (query.error) return <ErrorCard message={query.error} />;
-
   const pendingRiders = query.data?.pendingRiders ?? [];
   const heatmap = query.data?.ops.heatmap ?? [];
   const orders = query.data?.orders ?? [];
@@ -127,6 +119,14 @@ export default function RidersPage() {
     status: order.status.replaceAll("_", " "),
     eta: `${Math.max(10, Number(order.etaPredictions?.[0]?.minutesAway ?? 24))} min`
   }));
+
+  if (!ready) return <LoadingCard />;
+  if (!session) return <AuthRequiredCard message="Sign in with an admin account to manage riders." />;
+  if (!hasAdminAccess(session, "riders")) {
+    return <AccessDeniedCard message="Your manager role does not have access to the rider workspace." />;
+  }
+  if (query.loading) return <LoadingCard label="Loading riders..." />;
+  if (query.error) return <ErrorCard message={query.error} />;
 
   return (
     <DashboardShell
