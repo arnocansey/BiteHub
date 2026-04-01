@@ -25,21 +25,51 @@ type OperationsIntelligence = {
   }>;
 };
 
+type AdminOrder = {
+  id: string;
+  status: string;
+  placedAt?: string;
+  totalAmount: number | string;
+  customer?: { firstName?: string; lastName?: string; email?: string } | null;
+  restaurant?: { name?: string } | null;
+  delivery?: {
+    riderProfile?: {
+      id: string;
+      user?: { firstName?: string; lastName?: string } | null;
+    } | null;
+  } | null;
+  etaPredictions?: Array<{ minutesAway?: number | null; confidencePercent?: number | null }> | null;
+};
+
+type NearbyRider = {
+  id: string;
+  vehicleType?: string | null;
+  restaurantDistanceKm: number;
+  customerDistanceKm: number;
+  user?: { firstName?: string; lastName?: string } | null;
+};
+
 function formatRiderName(input?: { firstName?: string; lastName?: string } | null) {
   const full = [input?.firstName, input?.lastName].filter(Boolean).join(" ").trim();
   return full || "Unassigned rider";
+}
+
+function formatCustomerName(input?: { firstName?: string; lastName?: string } | null) {
+  const full = [input?.firstName, input?.lastName].filter(Boolean).join(" ").trim();
+  return full || "Customer";
 }
 
 export default function RidersPage() {
   const { session, ready } = useAdminSessionState();
   const query = useAdminData(
     async () => {
-      const [pendingRiders, ops] = await Promise.all([
+      const [pendingRiders, ops, orders] = await Promise.all([
         adminRequest<RiderApproval[]>("/admin/riders/pending"),
-        adminRequest<OperationsIntelligence>("/admin/reports/operations")
+        adminRequest<OperationsIntelligence>("/admin/reports/operations"),
+        adminRequest<AdminOrder[]>("/admin/orders")
       ]);
 
-      return { pendingRiders, ops };
+      return { pendingRiders, ops, orders };
     },
     [session?.accessToken]
   );
@@ -59,34 +89,44 @@ export default function RidersPage() {
 
   const pendingRiders = query.data?.pendingRiders ?? [];
   const heatmap = query.data?.ops.heatmap ?? [];
+  const orders = query.data?.orders ?? [];
   const riderQuality = (query.data?.ops.qualityScores ?? []).filter((score) => score.riderProfile?.user);
+  const activeOrdersList = orders.filter((order) =>
+    ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
+  );
+  const focusedOrder = activeOrdersList[0] ?? orders[0] ?? null;
   const focusedZone = heatmap[0] ?? null;
   const focusedRider = riderQuality[0] ?? null;
-  const liveOrders = heatmap.reduce((sum, zone) => sum + Number(zone.activeOrders ?? 0), 0);
-  const activeDrivers = riderQuality.length;
+  const nearbyRidersQuery = useAdminData(
+    () =>
+      focusedOrder?.id
+        ? adminRequest<NearbyRider[]>(`/admin/orders/${focusedOrder.id}/nearby-riders`)
+        : Promise.resolve([] as NearbyRider[]),
+    [session?.accessToken, focusedOrder?.id]
+  );
+  const nearbyRiders = nearbyRidersQuery.data ?? [];
+  const liveOrders = activeOrdersList.length;
+  const activeDrivers = nearbyRiders.length || riderQuality.length;
   const pendingPickups = pendingRiders.length;
   const averageDeliveryMinutes =
-    heatmap.length > 0
-      ? Math.round(heatmap.reduce((sum, zone) => sum + Number(zone.demandLevel ?? 0) * 3.2, 18) / heatmap.length)
-      : 24;
+    activeOrdersList.length > 0
+      ? Math.round(
+          activeOrdersList.reduce((sum, order) => sum + Number(order.etaPredictions?.[0]?.minutesAway ?? 24), 0) / activeOrdersList.length
+        )
+      : heatmap.length > 0
+        ? Math.round(heatmap.reduce((sum, zone) => sum + Number(zone.demandLevel ?? 0) * 3.2, 18) / heatmap.length)
+        : 24;
 
-  const feedRows = heatmap.length
-    ? heatmap.flatMap((zone, zoneIndex) =>
-        Array.from({ length: Math.min(3, Math.max(1, zone.activeOrders || 1)) }).map((_, rowIndex) => {
-          const score = riderQuality[(zoneIndex + rowIndex) % Math.max(riderQuality.length, 1)];
-          return {
-            id: `${zone.id}-${rowIndex}`,
-            orderCode: `BH-${String(zoneIndex + 1).padStart(2, "0")}${String(rowIndex + 7).padStart(2, "0")}`,
-            customer: `Zone ${zoneIndex + 1} customer`,
-            items: `${rowIndex + 1} item${rowIndex === 0 ? "" : "s"}`,
-            restaurant: zone.zoneLabel,
-            driver: score ? formatRiderName(score.riderProfile?.user) : "Dispatch pool",
-            status: zone.demandLevel >= 7 ? "Surge" : zone.supplyLevel < zone.demandLevel ? "Dispatching" : "Stable",
-            eta: `${Math.max(12, 18 + rowIndex * 4 + zoneIndex)} min`
-          };
-        })
-      )
-    : [];
+  const feedRows = activeOrdersList.map((order) => ({
+    id: order.id,
+    orderCode: order.id.slice(0, 8).toUpperCase(),
+    customer: formatCustomerName(order.customer),
+    items: "Live order",
+    restaurant: order.restaurant?.name ?? "Restaurant",
+    driver: order.delivery?.riderProfile?.user ? formatRiderName(order.delivery.riderProfile.user) : "Awaiting rider",
+    status: order.status.replaceAll("_", " "),
+    eta: `${Math.max(10, Number(order.etaPredictions?.[0]?.minutesAway ?? 24))} min`
+  }));
 
   return (
     <DashboardShell
@@ -113,9 +153,9 @@ export default function RidersPage() {
               </label>
 
               <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-                <p className="font-semibold">Dynamic surge slider</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-emerald-300/70">
-                  Active @ {focusedZone ? `${focusedZone.demandLevel / 10 + 1}` : "1.2"}x downtown
+                  <p className="font-semibold">Dynamic surge slider</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.2em] text-emerald-300/70">
+                  Active @ {focusedZone ? `${(focusedZone.demandLevel / 10 + 1).toFixed(1)}` : "1.2"}x {focusedZone?.zoneLabel ?? "dispatch zone"}
                 </p>
               </div>
             </div>
@@ -148,7 +188,7 @@ export default function RidersPage() {
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Live order feed</p>
-                  <p className="mt-1 text-sm text-slate-500">Current dispatch pressure by zone and rider pool.</p>
+                  <p className="mt-1 text-sm text-slate-500">Real BiteHub orders currently moving through dispatch.</p>
                 </div>
                 <div className="rounded-2xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-300">
                   {feedRows.length} queued rows
@@ -198,7 +238,7 @@ export default function RidersPage() {
                     ))
                   ) : (
                     <div className="p-4">
-                      <EmptyCard message="No live rider feed yet." />
+                      <EmptyCard message="No live dispatch orders yet." />
                     </div>
                   )}
                 </div>
@@ -285,19 +325,34 @@ export default function RidersPage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-white">
-                        {focusedRider ? formatRiderName(focusedRider.riderProfile?.user) : "Dispatch pool"}
+                        {focusedOrder?.delivery?.riderProfile?.user
+                          ? formatRiderName(focusedOrder.delivery.riderProfile.user)
+                          : nearbyRiders[0]?.user
+                            ? formatRiderName(nearbyRiders[0].user)
+                            : focusedRider
+                              ? formatRiderName(focusedRider.riderProfile?.user)
+                              : "Dispatch pool"}
                       </p>
-                      <p className="text-xs text-slate-400">{focusedRider?.scoreType ?? "Quality signal pending"}</p>
+                      <p className="text-xs text-slate-400">
+                        {focusedOrder?.delivery?.riderProfile?.user
+                          ? "Currently assigned to focused order"
+                          : nearbyRiders[0]
+                            ? `${nearbyRiders[0].restaurantDistanceKm} km from restaurant`
+                            : focusedRider?.scoreType ?? "Quality signal pending"}
+                      </p>
                     </div>
                   </div>
                 </div>
 
                 <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Quality monitor</p>
-                  <p className="mt-3 text-3xl font-semibold text-white">
-                    {focusedRider ? Number(focusedRider.scoreValue ?? 0).toFixed(1) : "0.0"}
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Focused order</p>
+                  <p className="mt-3 text-lg font-semibold text-white">{focusedOrder?.restaurant?.name ?? "No active order selected"}</p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {focusedOrder ? `${formatCustomerName(focusedOrder.customer)} · ${focusedOrder.status.replaceAll("_", " ")}` : "Waiting for live order activity"}
                   </p>
-                  <p className="mt-1 text-sm text-emerald-300">{focusedRider?.trend ?? "Stable rider confidence"}</p>
+                  <p className="mt-3 text-sm text-emerald-300">
+                    {focusedOrder ? `ETA ${Math.max(10, Number(focusedOrder.etaPredictions?.[0]?.minutesAway ?? 24))} min` : "Stable rider confidence"}
+                  </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
