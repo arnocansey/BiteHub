@@ -59,6 +59,35 @@ function formatCustomerName(input?: { firstName?: string; lastName?: string } | 
   return full || "Customer";
 }
 
+function getZoneHeat(zone: { demandLevel: number; supplyLevel: number; activeOrders: number }) {
+  const pressure = Number(zone.demandLevel ?? 0) - Number(zone.supplyLevel ?? 0) + Number(zone.activeOrders ?? 0) * 0.35;
+  if (pressure >= 6) {
+    return {
+      label: "Red zone",
+      dot: "bg-rose-500",
+      glow: "shadow-[0_0_0_14px_rgba(244,63,94,0.16)]",
+      chip: "bg-rose-500/15 text-rose-200",
+      panel: "border-rose-500/35 bg-rose-500/10"
+    };
+  }
+  if (pressure >= 3.5) {
+    return {
+      label: "Warm zone",
+      dot: "bg-orange-400",
+      glow: "shadow-[0_0_0_14px_rgba(251,146,60,0.16)]",
+      chip: "bg-orange-400/15 text-orange-200",
+      panel: "border-orange-400/30 bg-orange-400/10"
+    };
+  }
+  return {
+    label: "Balanced",
+    dot: "bg-emerald-400",
+    glow: "shadow-[0_0_0_14px_rgba(16,185,129,0.14)]",
+    chip: "bg-emerald-400/15 text-emerald-200",
+    panel: "border-emerald-400/25 bg-emerald-400/10"
+  };
+}
+
 export default function RidersPage() {
   const { session, ready } = useAdminSessionState();
   const query = useAdminData(
@@ -86,9 +115,15 @@ export default function RidersPage() {
   const activeOrdersList = orders.filter((order) =>
     ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
   );
+  const rankedZones = [...heatmap].sort((left, right) => {
+    const leftPressure = Number(left.demandLevel ?? 0) - Number(left.supplyLevel ?? 0) + Number(left.activeOrders ?? 0) * 0.35;
+    const rightPressure = Number(right.demandLevel ?? 0) - Number(right.supplyLevel ?? 0) + Number(right.activeOrders ?? 0) * 0.35;
+    return rightPressure - leftPressure;
+  });
   const focusedOrder = activeOrdersList[0] ?? orders[0] ?? null;
-  const focusedZone = heatmap[0] ?? null;
+  const focusedZone = rankedZones[0] ?? null;
   const focusedRider = riderQuality[0] ?? null;
+
   const nearbyRidersQuery = useAdminData(
     () =>
       focusedOrder?.id
@@ -96,6 +131,7 @@ export default function RidersPage() {
         : Promise.resolve([] as NearbyRider[]),
     [session?.accessToken, focusedOrder?.id]
   );
+
   const nearbyRiders = nearbyRidersQuery.data ?? [];
   const liveOrders = activeOrdersList.length;
   const activeDrivers = nearbyRiders.length || riderQuality.length;
@@ -103,7 +139,8 @@ export default function RidersPage() {
   const averageDeliveryMinutes =
     activeOrdersList.length > 0
       ? Math.round(
-          activeOrdersList.reduce((sum, order) => sum + Number(order.etaPredictions?.[0]?.minutesAway ?? 24), 0) / activeOrdersList.length
+          activeOrdersList.reduce((sum, order) => sum + Number(order.etaPredictions?.[0]?.minutesAway ?? 24), 0) /
+            activeOrdersList.length
         )
       : heatmap.length > 0
         ? Math.round(heatmap.reduce((sum, zone) => sum + Number(zone.demandLevel ?? 0) * 3.2, 18) / heatmap.length)
@@ -119,6 +156,13 @@ export default function RidersPage() {
     status: order.status.replaceAll("_", " "),
     eta: `${Math.max(10, Number(order.etaPredictions?.[0]?.minutesAway ?? 24))} min`
   }));
+
+  const hotZones = rankedZones.slice(0, 3).map((zone) => ({
+    ...zone,
+    heat: getZoneHeat(zone),
+    nudgeDrivers: Math.max(1, Math.ceil(Math.max(0, zone.demandLevel - zone.supplyLevel) / 2))
+  }));
+  const focusedZoneHeat = focusedZone ? getZoneHeat(focusedZone) : null;
 
   if (!ready) return <LoadingCard />;
   if (!session) return <AuthRequiredCard message="Sign in with an admin account to manage riders." />;
@@ -152,9 +196,9 @@ export default function RidersPage() {
                 />
               </label>
 
-              <div className="rounded-2xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">
-                  <p className="font-semibold">Dynamic surge slider</p>
-                  <p className="mt-1 text-xs uppercase tracking-[0.2em] text-emerald-300/70">
+              <div className={`rounded-2xl border px-4 py-3 text-sm ${focusedZoneHeat?.panel ?? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"}`}>
+                <p className="font-semibold">Dynamic surge slider</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-200/80">
                   Active @ {focusedZone ? `${(focusedZone.demandLevel / 10 + 1).toFixed(1)}` : "1.2"}x {focusedZone?.zoneLabel ?? "dispatch zone"}
                 </p>
               </div>
@@ -221,15 +265,7 @@ export default function RidersPage() {
                         <span>{row.restaurant}</span>
                         <span className="truncate text-slate-300">{row.driver}</span>
                         <span>
-                          <span
-                            className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${
-                              row.status === "Surge"
-                                ? "bg-amber-400/15 text-amber-300"
-                                : row.status === "Dispatching"
-                                  ? "bg-orange-400/15 text-orange-300"
-                                  : "bg-emerald-400/15 text-emerald-300"
-                            }`}
-                          >
+                          <span className="inline-flex rounded-full bg-orange-400/15 px-2.5 py-1 text-[11px] font-semibold text-orange-200">
                             {row.status}
                           </span>
                         </span>
@@ -247,17 +283,28 @@ export default function RidersPage() {
           </section>
 
           <section className="relative overflow-hidden bg-[#07101d] p-5 2xl:border-l 2xl:border-slate-800">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(34,197,94,0.15),transparent_25%),radial-gradient(circle_at_80%_30%,rgba(249,115,22,0.12),transparent_18%),radial-gradient(circle_at_60%_75%,rgba(56,189,248,0.1),transparent_20%)]" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(244,63,94,0.14),transparent_24%),radial-gradient(circle_at_80%_30%,rgba(249,115,22,0.12),transparent_18%),radial-gradient(circle_at_60%_75%,rgba(56,189,248,0.08),transparent_20%)]" />
             <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:48px_48px]" />
 
             <div className="relative h-full min-h-[540px] rounded-[28px] border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.65),rgba(2,6,23,0.85))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] xl:min-h-[600px] 2xl:min-h-[720px]">
-              <div className="absolute left-[12%] top-[22%] h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_10px_rgba(16,185,129,0.12)]" />
-              <div className="absolute left-[28%] top-[34%] h-3 w-3 rounded-full bg-orange-400 shadow-[0_0_0_10px_rgba(249,115,22,0.12)]" />
-              <div className="absolute left-[43%] top-[48%] h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_10px_rgba(16,185,129,0.12)]" />
-              <div className="absolute left-[63%] top-[26%] h-3 w-3 rounded-full bg-sky-400 shadow-[0_0_0_10px_rgba(56,189,248,0.12)]" />
-              <div className="absolute left-[74%] top-[60%] h-3 w-3 rounded-full bg-emerald-400 shadow-[0_0_0_10px_rgba(16,185,129,0.12)]" />
-              <div className="absolute left-[58%] top-[72%] h-3 w-3 rounded-full bg-orange-400 shadow-[0_0_0_10px_rgba(249,115,22,0.12)]" />
-              <div className="absolute left-[19%] top-[62%] h-3 w-3 rounded-full bg-slate-200 shadow-[0_0_0_10px_rgba(226,232,240,0.08)]" />
+              {rankedZones.slice(0, 6).map((zone, index) => {
+                const heat = getZoneHeat(zone);
+                const positions = [
+                  "left-[12%] top-[22%]",
+                  "left-[28%] top-[34%]",
+                  "left-[43%] top-[48%]",
+                  "left-[63%] top-[26%]",
+                  "left-[74%] top-[60%]",
+                  "left-[58%] top-[72%]"
+                ];
+
+                return (
+                  <div
+                    key={zone.id}
+                    className={`absolute h-3.5 w-3.5 rounded-full ${positions[index] ?? "left-[20%] top-[20%]"} ${heat.dot} ${heat.glow}`}
+                  />
+                );
+              })}
 
               <svg className="absolute inset-0 h-full w-full opacity-60" viewBox="0 0 1000 800" preserveAspectRatio="none">
                 <path d="M40 600 C180 560, 220 430, 340 410 S580 380, 660 520 820 690, 960 620" fill="none" stroke="rgba(226,232,240,0.22)" strokeWidth="8" />
@@ -271,21 +318,26 @@ export default function RidersPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Fleet map</p>
                   <h3 className="mt-1 text-xl font-semibold text-white">Dispatch pressure map</h3>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-900/70 px-3 py-2 text-sm text-slate-300">
+                <div className={`rounded-2xl border px-3 py-2 text-sm text-slate-200 ${focusedZoneHeat?.panel ?? "border-slate-700 bg-slate-900/70"}`}>
                   {focusedZone ? focusedZone.zoneLabel : "No active zone"}
                 </div>
               </div>
 
               <div className="relative mt-6 grid gap-3 md:grid-cols-3">
-                {(heatmap.length ? heatmap.slice(0, 3) : []).map((zone) => (
-                  <div key={zone.id} className="rounded-2xl border border-slate-700 bg-slate-950/60 px-4 py-3">
+                {hotZones.map((zone) => (
+                  <div key={zone.id} className={`rounded-2xl border px-4 py-3 ${zone.heat.panel}`}>
                     <p className="text-sm font-semibold text-white">{zone.zoneLabel}</p>
-                    <p className="mt-1 text-xs text-slate-400">
+                    <p className="mt-1 text-xs text-slate-300">
                       Demand {zone.demandLevel}/10 · Supply {zone.supplyLevel}/10
                     </p>
-                    <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-emerald-300">
-                      {zone.activeOrders} active deliveries
-                    </p>
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white">
+                        {zone.activeOrders} active deliveries
+                      </p>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${zone.heat.chip}`}>
+                        {zone.heat.label}
+                      </span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -317,6 +369,25 @@ export default function RidersPage() {
               </div>
 
               <div className="mt-4 space-y-3">
+                <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Pre-rush nudge</p>
+                  {focusedZone ? (
+                    <>
+                      <p className="mt-3 text-lg font-semibold text-white">
+                        Move {hotZones[0]?.nudgeDrivers ?? 1} rider{(hotZones[0]?.nudgeDrivers ?? 1) === 1 ? "" : "s"} toward {focusedZone.zoneLabel}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">
+                        Demand is outpacing available supply here. Push nearby drivers into this red zone before the rush starts.
+                      </p>
+                      <div className="mt-3 inline-flex rounded-full bg-rose-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-200">
+                        Highest demand zone
+                      </div>
+                    </>
+                  ) : (
+                    <p className="mt-3 text-sm text-slate-400">No demand hotspot is active yet.</p>
+                  )}
+                </div>
+
                 <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assigned rider</p>
                   <div className="mt-3 flex items-center gap-3">
