@@ -69,10 +69,16 @@ export function getAdminSession(): AdminSession | null {
 }
 
 export function saveAdminSession(session: AdminSession) {
+  if (typeof window === "undefined") {
+    return;
+  }
   window.localStorage.setItem(storageKey, JSON.stringify(session));
 }
 
 export function clearAdminSession() {
+  if (typeof window === "undefined") {
+    return;
+  }
   window.localStorage.removeItem(storageKey);
 }
 
@@ -172,9 +178,11 @@ export function useAdminSessionState() {
 
 export function useAdminData<T>(loader: () => Promise<T>, deps: unknown[] = []) {
   const queryKey = useMemo(() => ["admin-data", ...deps.map((dep) => String(dep ?? "null"))], deps);
+  const enabled = deps.length === 0 || deps.every((dep) => dep !== undefined && dep !== null && dep !== "");
   const query = useQuery({
     queryKey,
     queryFn: loader,
+    enabled,
     retry: 1
   });
 
