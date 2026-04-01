@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type AdminSession = {
   accessToken: string;
@@ -23,6 +23,7 @@ export type AdminSession = {
 
 const storageKey = "bitehub_admin_session";
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:4000/api/v1";
+let adminQueryInstanceCounter = 0;
 
 function redirectToLogin() {
   if (typeof window === "undefined") {
@@ -177,7 +178,16 @@ export function useAdminSessionState() {
 }
 
 export function useAdminData<T>(loader: () => Promise<T>, deps: unknown[] = []) {
-  const queryKey = useMemo(() => ["admin-data", ...deps.map((dep) => String(dep ?? "null"))], deps);
+  const instanceKeyRef = useRef<string | null>(null);
+  if (!instanceKeyRef.current) {
+    adminQueryInstanceCounter += 1;
+    instanceKeyRef.current = `query-${adminQueryInstanceCounter}`;
+  }
+
+  const queryKey = useMemo(
+    () => ["admin-data", instanceKeyRef.current, ...deps.map((dep) => String(dep ?? "null"))],
+    deps
+  );
   const enabled = deps.length === 0 || deps.every((dep) => dep !== undefined && dep !== null && dep !== "");
   const query = useQuery({
     queryKey,
