@@ -1,8 +1,14 @@
 import type { Request, Response } from "express";
 import { DeliveryStatus, OrderStatus, PaymentMethod, PaymentStatus, UserRole } from "../generated/prisma/client";
+import { PayoutRequestStatus, PayoutRequestTarget } from "../generated/prisma/enums";
 import { prisma } from "../config/prisma";
 import { emitOrderUpdate } from "../realtime/socket";
 import { createDeliveryEvent, upsertEtaPrediction } from "../services/order-trust.service";
+import { getRiderPayoutSnapshot } from "../services/payout-request.service";
+
+const payoutRequestDelegate = prisma as typeof prisma & {
+  payoutRequest: any;
+};
 
 export const riderController = {
   async profile(req: Request, res: Response) {
@@ -11,6 +17,61 @@ export const riderController = {
       include: { user: true }
     });
     res.json(rider);
+  },
+
+  async payoutRequests(req: Request, res: Response) {
+    const snapshot = await getRiderPayoutSnapshot(req.user!.sub);
+    res.json(snapshot);
+  },
+
+  async createPayoutRequest(req: Request, res: Response) {
+    const snapshot = await getRiderPayoutSnapshot(req.user!.sub);
+
+    if (snapshot.approvalStatus !== "APPROVED") {
+      return res.status(400).json({ message: "Rider account must be approved before requesting a payout." });
+    }
+
+    if (snapshot.requests.some((item) => item.status === PayoutRequestStatus.PENDING)) {
+      return res.status(409).json({ message: "There is already a pending payout request awaiting admin review." });
+    }
+
+    if (snapshot.availableAmount < snapshot.minimumPayoutAmount) {
+      return res.status(400).json({
+        message: `Minimum payout request is GHS ${snapshot.minimumPayoutAmount.toLocaleString()}.`
+      });
+    }
+
+    const request = await payoutRequestDelegate.payoutRequest.create({
+      data: {
+        targetType: PayoutRequestTarget.RIDER,
+        requesterUserId: req.user!.sub,
+        riderProfileId: snapshot.profileId,
+        requestedAmount: snapshot.availableAmount,
+        note: req.body.note ?? null
+      }
+    });
+
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true }
+    });
+
+    if (admins.length) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          title: "Rider payout request",
+          body: `${snapshot.payeeName} requested a payout of GHS ${snapshot.availableAmount.toLocaleString()}.`,
+          payload: {
+            type: "PAYOUT_REQUEST",
+            targetType: PayoutRequestTarget.RIDER,
+            requestId: request.id
+          }
+        }))
+      });
+    }
+
+    res.status(201).json(request);
   },
 
   async jobs(req: Request, res: Response) {

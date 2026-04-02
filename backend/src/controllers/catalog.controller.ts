@@ -2,11 +2,47 @@ import type { Request, Response } from "express";
 import { MenuItemStatus } from "../generated/prisma/client";
 import { prisma } from "../config/prisma";
 
+function mapMenuItemPricing(item: any) {
+  const now = new Date();
+  const specialStartsAt = item.specialStartsAt ? new Date(item.specialStartsAt) : null;
+  const specialEndsAt = item.specialEndsAt ? new Date(item.specialEndsAt) : null;
+  const hasActiveSpecial =
+    typeof item.specialPrice !== "undefined" &&
+    item.specialPrice !== null &&
+    (!specialStartsAt || specialStartsAt <= now) &&
+    (!specialEndsAt || specialEndsAt >= now);
+
+  return {
+    ...item,
+    effectivePrice: hasActiveSpecial ? item.specialPrice : item.price,
+    originalPrice: hasActiveSpecial ? item.price : null,
+    activePriceLabel: hasActiveSpecial ? item.specialPriceLabel ?? "Special price" : null
+  };
+}
+
+function mapRestaurantPricing(restaurant: any) {
+  return {
+    ...restaurant,
+    menuItems: Array.isArray(restaurant.menuItems) ? restaurant.menuItems.map(mapMenuItemPricing) : restaurant.menuItems
+  };
+}
+
 const restaurantCardInclude = {
   category: true,
   menuItems: {
     where: { status: MenuItemStatus.AVAILABLE },
-    include: { dietaryTags: { include: { dietaryTag: true } } },
+    include: {
+      dietaryTags: { include: { dietaryTag: true } },
+      modifierGroups: {
+        include: {
+          options: {
+            where: { isAvailable: true },
+            orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }]
+          }
+        },
+        orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }]
+      }
+    },
     orderBy: [
       { isSignature: "desc" as const },
       { isFeatured: "desc" as const },
@@ -49,7 +85,7 @@ export const catalogController = {
       include: restaurantCardInclude,
       orderBy: [{ isFeatured: "desc" }, { averageRating: "desc" }, { createdAt: "desc" }]
     });
-    res.json(restaurants);
+    res.json(restaurants.map(mapRestaurantPricing));
   },
 
   async getRestaurant(req: Request, res: Response) {
@@ -65,7 +101,7 @@ export const catalogController = {
         }
       }
     });
-    res.json(restaurant);
+    res.json(restaurant ? mapRestaurantPricing(restaurant) : restaurant);
   },
 
   async getRestaurantMenu(req: Request, res: Response) {
@@ -76,6 +112,15 @@ export const catalogController = {
         category: true,
         dietaryTags: {
           include: { dietaryTag: true }
+        },
+        modifierGroups: {
+          include: {
+          options: {
+            where: { isAvailable: true },
+            orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }]
+          }
+        },
+          orderBy: [{ sortOrder: "asc" as const }, { id: "asc" as const }]
         }
       },
       orderBy: [
@@ -84,7 +129,7 @@ export const catalogController = {
         { createdAt: "asc" as const }
       ]
     });
-    res.json(menu);
+    res.json(menu.map(mapMenuItemPricing));
   },
 
   async listCategories(_req: Request, res: Response) {
@@ -105,7 +150,7 @@ export const catalogController = {
       include: restaurantCardInclude,
       orderBy: [{ isFeatured: "desc" }, { averageRating: "desc" }]
     });
-    res.json(results);
+    res.json(results.map(mapRestaurantPricing));
   },
 
   async restaurantHighlights(req: Request, res: Response) {
@@ -144,12 +189,13 @@ export const catalogController = {
       return;
     }
 
-    const signatureItems = restaurant.menuItems.filter((item) => item.isSignature).slice(0, 4);
-    const featuredItems = restaurant.menuItems.filter((item) => item.isFeatured).slice(0, 6);
+    const pricedMenuItems = restaurant.menuItems.map(mapMenuItemPricing);
+    const signatureItems = pricedMenuItems.filter((item) => item.isSignature).slice(0, 4);
+    const featuredItems = pricedMenuItems.filter((item) => item.isFeatured).slice(0, 6);
     const dietaryTags = Array.from(
       new Map(
-        restaurant.menuItems
-          .flatMap((item) => item.dietaryTags.map((tag) => tag.dietaryTag))
+        pricedMenuItems
+          .flatMap((item) => item.dietaryTags.map((tag: any) => tag.dietaryTag))
           .map((tag) => [tag.id, tag])
       ).values()
     );

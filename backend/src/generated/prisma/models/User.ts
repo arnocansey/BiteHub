@@ -241,6 +241,8 @@ export type UserWhereInput = {
   orders?: Prisma.OrderListRelationFilter
   addresses?: Prisma.AddressListRelationFilter
   passwordResetTokens?: Prisma.PasswordResetTokenListRelationFilter
+  payoutRequests?: Prisma.PayoutRequestListRelationFilter
+  payoutReviews?: Prisma.PayoutRequestListRelationFilter
 }
 
 export type UserOrderByWithRelationInput = {
@@ -266,6 +268,8 @@ export type UserOrderByWithRelationInput = {
   orders?: Prisma.OrderOrderByRelationAggregateInput
   addresses?: Prisma.AddressOrderByRelationAggregateInput
   passwordResetTokens?: Prisma.PasswordResetTokenOrderByRelationAggregateInput
+  payoutRequests?: Prisma.PayoutRequestOrderByRelationAggregateInput
+  payoutReviews?: Prisma.PayoutRequestOrderByRelationAggregateInput
 }
 
 export type UserWhereUniqueInput = Prisma.AtLeast<{
@@ -294,6 +298,8 @@ export type UserWhereUniqueInput = Prisma.AtLeast<{
   orders?: Prisma.OrderListRelationFilter
   addresses?: Prisma.AddressListRelationFilter
   passwordResetTokens?: Prisma.PasswordResetTokenListRelationFilter
+  payoutRequests?: Prisma.PayoutRequestListRelationFilter
+  payoutReviews?: Prisma.PayoutRequestListRelationFilter
 }, "id" | "email" | "phone">
 
 export type UserOrderByWithAggregationInput = {
@@ -353,6 +359,8 @@ export type UserCreateInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateInput = {
@@ -378,6 +386,8 @@ export type UserUncheckedCreateInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUpdateInput = {
@@ -403,6 +413,8 @@ export type UserUpdateInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateInput = {
@@ -428,6 +440,8 @@ export type UserUncheckedUpdateInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateManyInput = {
@@ -632,6 +646,36 @@ export type UserUpdateOneRequiredWithoutOrdersNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutOrdersInput, Prisma.UserUpdateWithoutOrdersInput>, Prisma.UserUncheckedUpdateWithoutOrdersInput>
 }
 
+export type UserCreateNestedOneWithoutPayoutRequestsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPayoutRequestsInput, Prisma.UserUncheckedCreateWithoutPayoutRequestsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPayoutRequestsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserCreateNestedOneWithoutPayoutReviewsInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPayoutReviewsInput, Prisma.UserUncheckedCreateWithoutPayoutReviewsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPayoutReviewsInput
+  connect?: Prisma.UserWhereUniqueInput
+}
+
+export type UserUpdateOneRequiredWithoutPayoutRequestsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPayoutRequestsInput, Prisma.UserUncheckedCreateWithoutPayoutRequestsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPayoutRequestsInput
+  upsert?: Prisma.UserUpsertWithoutPayoutRequestsInput
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPayoutRequestsInput, Prisma.UserUpdateWithoutPayoutRequestsInput>, Prisma.UserUncheckedUpdateWithoutPayoutRequestsInput>
+}
+
+export type UserUpdateOneWithoutPayoutReviewsNestedInput = {
+  create?: Prisma.XOR<Prisma.UserCreateWithoutPayoutReviewsInput, Prisma.UserUncheckedCreateWithoutPayoutReviewsInput>
+  connectOrCreate?: Prisma.UserCreateOrConnectWithoutPayoutReviewsInput
+  upsert?: Prisma.UserUpsertWithoutPayoutReviewsInput
+  disconnect?: Prisma.UserWhereInput | boolean
+  delete?: Prisma.UserWhereInput | boolean
+  connect?: Prisma.UserWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.UserUpdateToOneWithWhereWithoutPayoutReviewsInput, Prisma.UserUpdateWithoutPayoutReviewsInput>, Prisma.UserUncheckedUpdateWithoutPayoutReviewsInput>
+}
+
 export type UserCreateNestedOneWithoutFavoritesInput = {
   create?: Prisma.XOR<Prisma.UserCreateWithoutFavoritesInput, Prisma.UserUncheckedCreateWithoutFavoritesInput>
   connectOrCreate?: Prisma.UserCreateOrConnectWithoutFavoritesInput
@@ -726,6 +770,8 @@ export type UserCreateWithoutCustomerProfileInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutCustomerProfileInput = {
@@ -750,6 +796,8 @@ export type UserUncheckedCreateWithoutCustomerProfileInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutCustomerProfileInput = {
@@ -790,6 +838,8 @@ export type UserUpdateWithoutCustomerProfileInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutCustomerProfileInput = {
@@ -814,6 +864,8 @@ export type UserUncheckedUpdateWithoutCustomerProfileInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutVendorProfileInput = {
@@ -838,6 +890,8 @@ export type UserCreateWithoutVendorProfileInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutVendorProfileInput = {
@@ -862,6 +916,8 @@ export type UserUncheckedCreateWithoutVendorProfileInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutVendorProfileInput = {
@@ -902,6 +958,8 @@ export type UserUpdateWithoutVendorProfileInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutVendorProfileInput = {
@@ -926,6 +984,8 @@ export type UserUncheckedUpdateWithoutVendorProfileInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutRiderProfileInput = {
@@ -950,6 +1010,8 @@ export type UserCreateWithoutRiderProfileInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutRiderProfileInput = {
@@ -974,6 +1036,8 @@ export type UserUncheckedCreateWithoutRiderProfileInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutRiderProfileInput = {
@@ -1014,6 +1078,8 @@ export type UserUpdateWithoutRiderProfileInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutRiderProfileInput = {
@@ -1038,6 +1104,8 @@ export type UserUncheckedUpdateWithoutRiderProfileInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutAdminProfileInput = {
@@ -1062,6 +1130,8 @@ export type UserCreateWithoutAdminProfileInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutAdminProfileInput = {
@@ -1086,6 +1156,8 @@ export type UserUncheckedCreateWithoutAdminProfileInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutAdminProfileInput = {
@@ -1126,6 +1198,8 @@ export type UserUpdateWithoutAdminProfileInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAdminProfileInput = {
@@ -1150,6 +1224,8 @@ export type UserUncheckedUpdateWithoutAdminProfileInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutAddressesInput = {
@@ -1174,6 +1250,8 @@ export type UserCreateWithoutAddressesInput = {
   reviews?: Prisma.ReviewCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutAddressesInput = {
@@ -1198,6 +1276,8 @@ export type UserUncheckedCreateWithoutAddressesInput = {
   reviews?: Prisma.ReviewUncheckedCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutAddressesInput = {
@@ -1238,6 +1318,8 @@ export type UserUpdateWithoutAddressesInput = {
   reviews?: Prisma.ReviewUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAddressesInput = {
@@ -1262,6 +1344,8 @@ export type UserUncheckedUpdateWithoutAddressesInput = {
   reviews?: Prisma.ReviewUncheckedUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutOrdersInput = {
@@ -1286,6 +1370,8 @@ export type UserCreateWithoutOrdersInput = {
   reviews?: Prisma.ReviewCreateNestedManyWithoutUserInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutOrdersInput = {
@@ -1310,6 +1396,8 @@ export type UserUncheckedCreateWithoutOrdersInput = {
   reviews?: Prisma.ReviewUncheckedCreateNestedManyWithoutUserInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutOrdersInput = {
@@ -1350,6 +1438,8 @@ export type UserUpdateWithoutOrdersInput = {
   reviews?: Prisma.ReviewUpdateManyWithoutUserNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutOrdersInput = {
@@ -1374,6 +1464,248 @@ export type UserUncheckedUpdateWithoutOrdersInput = {
   reviews?: Prisma.ReviewUncheckedUpdateManyWithoutUserNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
+}
+
+export type UserCreateWithoutPayoutRequestsInput = {
+  id?: string
+  email: string
+  phone?: string | null
+  passwordHash: string
+  firstName: string
+  lastName: string
+  role: $Enums.UserRole
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  customerProfile?: Prisma.CustomerProfileCreateNestedOneWithoutUserInput
+  vendorProfile?: Prisma.VendorProfileCreateNestedOneWithoutUserInput
+  riderProfile?: Prisma.RiderProfileCreateNestedOneWithoutUserInput
+  adminProfile?: Prisma.AdminProfileCreateNestedOneWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  favorites?: Prisma.FavoriteCreateNestedManyWithoutUserInput
+  reviews?: Prisma.ReviewCreateNestedManyWithoutUserInput
+  orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
+  addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
+  passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
+}
+
+export type UserUncheckedCreateWithoutPayoutRequestsInput = {
+  id?: string
+  email: string
+  phone?: string | null
+  passwordHash: string
+  firstName: string
+  lastName: string
+  role: $Enums.UserRole
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  customerProfile?: Prisma.CustomerProfileUncheckedCreateNestedOneWithoutUserInput
+  vendorProfile?: Prisma.VendorProfileUncheckedCreateNestedOneWithoutUserInput
+  riderProfile?: Prisma.RiderProfileUncheckedCreateNestedOneWithoutUserInput
+  adminProfile?: Prisma.AdminProfileUncheckedCreateNestedOneWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  favorites?: Prisma.FavoriteUncheckedCreateNestedManyWithoutUserInput
+  reviews?: Prisma.ReviewUncheckedCreateNestedManyWithoutUserInput
+  orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
+  addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
+  passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
+}
+
+export type UserCreateOrConnectWithoutPayoutRequestsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutPayoutRequestsInput, Prisma.UserUncheckedCreateWithoutPayoutRequestsInput>
+}
+
+export type UserCreateWithoutPayoutReviewsInput = {
+  id?: string
+  email: string
+  phone?: string | null
+  passwordHash: string
+  firstName: string
+  lastName: string
+  role: $Enums.UserRole
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  customerProfile?: Prisma.CustomerProfileCreateNestedOneWithoutUserInput
+  vendorProfile?: Prisma.VendorProfileCreateNestedOneWithoutUserInput
+  riderProfile?: Prisma.RiderProfileCreateNestedOneWithoutUserInput
+  adminProfile?: Prisma.AdminProfileCreateNestedOneWithoutUserInput
+  notifications?: Prisma.NotificationCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogCreateNestedManyWithoutUserInput
+  favorites?: Prisma.FavoriteCreateNestedManyWithoutUserInput
+  reviews?: Prisma.ReviewCreateNestedManyWithoutUserInput
+  orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
+  addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
+  passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+}
+
+export type UserUncheckedCreateWithoutPayoutReviewsInput = {
+  id?: string
+  email: string
+  phone?: string | null
+  passwordHash: string
+  firstName: string
+  lastName: string
+  role: $Enums.UserRole
+  isActive?: boolean
+  lastLoginAt?: Date | string | null
+  createdAt?: Date | string
+  updatedAt?: Date | string
+  customerProfile?: Prisma.CustomerProfileUncheckedCreateNestedOneWithoutUserInput
+  vendorProfile?: Prisma.VendorProfileUncheckedCreateNestedOneWithoutUserInput
+  riderProfile?: Prisma.RiderProfileUncheckedCreateNestedOneWithoutUserInput
+  adminProfile?: Prisma.AdminProfileUncheckedCreateNestedOneWithoutUserInput
+  notifications?: Prisma.NotificationUncheckedCreateNestedManyWithoutUserInput
+  auditLogs?: Prisma.AuditLogUncheckedCreateNestedManyWithoutUserInput
+  favorites?: Prisma.FavoriteUncheckedCreateNestedManyWithoutUserInput
+  reviews?: Prisma.ReviewUncheckedCreateNestedManyWithoutUserInput
+  orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
+  addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
+  passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+}
+
+export type UserCreateOrConnectWithoutPayoutReviewsInput = {
+  where: Prisma.UserWhereUniqueInput
+  create: Prisma.XOR<Prisma.UserCreateWithoutPayoutReviewsInput, Prisma.UserUncheckedCreateWithoutPayoutReviewsInput>
+}
+
+export type UserUpsertWithoutPayoutRequestsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutPayoutRequestsInput, Prisma.UserUncheckedUpdateWithoutPayoutRequestsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutPayoutRequestsInput, Prisma.UserUncheckedCreateWithoutPayoutRequestsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutPayoutRequestsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutPayoutRequestsInput, Prisma.UserUncheckedUpdateWithoutPayoutRequestsInput>
+}
+
+export type UserUpdateWithoutPayoutRequestsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  firstName?: Prisma.StringFieldUpdateOperationsInput | string
+  lastName?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  customerProfile?: Prisma.CustomerProfileUpdateOneWithoutUserNestedInput
+  vendorProfile?: Prisma.VendorProfileUpdateOneWithoutUserNestedInput
+  riderProfile?: Prisma.RiderProfileUpdateOneWithoutUserNestedInput
+  adminProfile?: Prisma.AdminProfileUpdateOneWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  favorites?: Prisma.FavoriteUpdateManyWithoutUserNestedInput
+  reviews?: Prisma.ReviewUpdateManyWithoutUserNestedInput
+  orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
+  addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
+  passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
+}
+
+export type UserUncheckedUpdateWithoutPayoutRequestsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  firstName?: Prisma.StringFieldUpdateOperationsInput | string
+  lastName?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  customerProfile?: Prisma.CustomerProfileUncheckedUpdateOneWithoutUserNestedInput
+  vendorProfile?: Prisma.VendorProfileUncheckedUpdateOneWithoutUserNestedInput
+  riderProfile?: Prisma.RiderProfileUncheckedUpdateOneWithoutUserNestedInput
+  adminProfile?: Prisma.AdminProfileUncheckedUpdateOneWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  favorites?: Prisma.FavoriteUncheckedUpdateManyWithoutUserNestedInput
+  reviews?: Prisma.ReviewUncheckedUpdateManyWithoutUserNestedInput
+  orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
+  addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
+  passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
+}
+
+export type UserUpsertWithoutPayoutReviewsInput = {
+  update: Prisma.XOR<Prisma.UserUpdateWithoutPayoutReviewsInput, Prisma.UserUncheckedUpdateWithoutPayoutReviewsInput>
+  create: Prisma.XOR<Prisma.UserCreateWithoutPayoutReviewsInput, Prisma.UserUncheckedCreateWithoutPayoutReviewsInput>
+  where?: Prisma.UserWhereInput
+}
+
+export type UserUpdateToOneWithWhereWithoutPayoutReviewsInput = {
+  where?: Prisma.UserWhereInput
+  data: Prisma.XOR<Prisma.UserUpdateWithoutPayoutReviewsInput, Prisma.UserUncheckedUpdateWithoutPayoutReviewsInput>
+}
+
+export type UserUpdateWithoutPayoutReviewsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  firstName?: Prisma.StringFieldUpdateOperationsInput | string
+  lastName?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  customerProfile?: Prisma.CustomerProfileUpdateOneWithoutUserNestedInput
+  vendorProfile?: Prisma.VendorProfileUpdateOneWithoutUserNestedInput
+  riderProfile?: Prisma.RiderProfileUpdateOneWithoutUserNestedInput
+  adminProfile?: Prisma.AdminProfileUpdateOneWithoutUserNestedInput
+  notifications?: Prisma.NotificationUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUpdateManyWithoutUserNestedInput
+  favorites?: Prisma.FavoriteUpdateManyWithoutUserNestedInput
+  reviews?: Prisma.ReviewUpdateManyWithoutUserNestedInput
+  orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
+  addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
+  passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+}
+
+export type UserUncheckedUpdateWithoutPayoutReviewsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  email?: Prisma.StringFieldUpdateOperationsInput | string
+  phone?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  passwordHash?: Prisma.StringFieldUpdateOperationsInput | string
+  firstName?: Prisma.StringFieldUpdateOperationsInput | string
+  lastName?: Prisma.StringFieldUpdateOperationsInput | string
+  role?: Prisma.EnumUserRoleFieldUpdateOperationsInput | $Enums.UserRole
+  isActive?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  lastLoginAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+  createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
+  customerProfile?: Prisma.CustomerProfileUncheckedUpdateOneWithoutUserNestedInput
+  vendorProfile?: Prisma.VendorProfileUncheckedUpdateOneWithoutUserNestedInput
+  riderProfile?: Prisma.RiderProfileUncheckedUpdateOneWithoutUserNestedInput
+  adminProfile?: Prisma.AdminProfileUncheckedUpdateOneWithoutUserNestedInput
+  notifications?: Prisma.NotificationUncheckedUpdateManyWithoutUserNestedInput
+  auditLogs?: Prisma.AuditLogUncheckedUpdateManyWithoutUserNestedInput
+  favorites?: Prisma.FavoriteUncheckedUpdateManyWithoutUserNestedInput
+  reviews?: Prisma.ReviewUncheckedUpdateManyWithoutUserNestedInput
+  orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
+  addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
+  passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
 }
 
 export type UserCreateWithoutFavoritesInput = {
@@ -1398,6 +1730,8 @@ export type UserCreateWithoutFavoritesInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutFavoritesInput = {
@@ -1422,6 +1756,8 @@ export type UserUncheckedCreateWithoutFavoritesInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutFavoritesInput = {
@@ -1462,6 +1798,8 @@ export type UserUpdateWithoutFavoritesInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutFavoritesInput = {
@@ -1486,6 +1824,8 @@ export type UserUncheckedUpdateWithoutFavoritesInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutReviewsInput = {
@@ -1510,6 +1850,8 @@ export type UserCreateWithoutReviewsInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutReviewsInput = {
@@ -1534,6 +1876,8 @@ export type UserUncheckedCreateWithoutReviewsInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutReviewsInput = {
@@ -1574,6 +1918,8 @@ export type UserUpdateWithoutReviewsInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutReviewsInput = {
@@ -1598,6 +1944,8 @@ export type UserUncheckedUpdateWithoutReviewsInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutNotificationsInput = {
@@ -1622,6 +1970,8 @@ export type UserCreateWithoutNotificationsInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutNotificationsInput = {
@@ -1646,6 +1996,8 @@ export type UserUncheckedCreateWithoutNotificationsInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutNotificationsInput = {
@@ -1686,6 +2038,8 @@ export type UserUpdateWithoutNotificationsInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutNotificationsInput = {
@@ -1710,6 +2064,8 @@ export type UserUncheckedUpdateWithoutNotificationsInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutAuditLogsInput = {
@@ -1734,6 +2090,8 @@ export type UserCreateWithoutAuditLogsInput = {
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutAuditLogsInput = {
@@ -1758,6 +2116,8 @@ export type UserUncheckedCreateWithoutAuditLogsInput = {
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedCreateNestedManyWithoutUserInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutAuditLogsInput = {
@@ -1798,6 +2158,8 @@ export type UserUpdateWithoutAuditLogsInput = {
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutAuditLogsInput = {
@@ -1822,6 +2184,8 @@ export type UserUncheckedUpdateWithoutAuditLogsInput = {
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
   passwordResetTokens?: Prisma.PasswordResetTokenUncheckedUpdateManyWithoutUserNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserCreateWithoutPasswordResetTokensInput = {
@@ -1846,6 +2210,8 @@ export type UserCreateWithoutPasswordResetTokensInput = {
   reviews?: Prisma.ReviewCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressCreateNestedManyWithoutCustomerInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserUncheckedCreateWithoutPasswordResetTokensInput = {
@@ -1870,6 +2236,8 @@ export type UserUncheckedCreateWithoutPasswordResetTokensInput = {
   reviews?: Prisma.ReviewUncheckedCreateNestedManyWithoutUserInput
   orders?: Prisma.OrderUncheckedCreateNestedManyWithoutCustomerInput
   addresses?: Prisma.AddressUncheckedCreateNestedManyWithoutCustomerInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutRequesterInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutReviewedByInput
 }
 
 export type UserCreateOrConnectWithoutPasswordResetTokensInput = {
@@ -1910,6 +2278,8 @@ export type UserUpdateWithoutPasswordResetTokensInput = {
   reviews?: Prisma.ReviewUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUpdateManyWithoutCustomerNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUpdateManyWithoutReviewedByNestedInput
 }
 
 export type UserUncheckedUpdateWithoutPasswordResetTokensInput = {
@@ -1934,6 +2304,8 @@ export type UserUncheckedUpdateWithoutPasswordResetTokensInput = {
   reviews?: Prisma.ReviewUncheckedUpdateManyWithoutUserNestedInput
   orders?: Prisma.OrderUncheckedUpdateManyWithoutCustomerNestedInput
   addresses?: Prisma.AddressUncheckedUpdateManyWithoutCustomerNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutRequesterNestedInput
+  payoutReviews?: Prisma.PayoutRequestUncheckedUpdateManyWithoutReviewedByNestedInput
 }
 
 
@@ -1949,6 +2321,8 @@ export type UserCountOutputType = {
   orders: number
   addresses: number
   passwordResetTokens: number
+  payoutRequests: number
+  payoutReviews: number
 }
 
 export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -1959,6 +2333,8 @@ export type UserCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.I
   orders?: boolean | UserCountOutputTypeCountOrdersArgs
   addresses?: boolean | UserCountOutputTypeCountAddressesArgs
   passwordResetTokens?: boolean | UserCountOutputTypeCountPasswordResetTokensArgs
+  payoutRequests?: boolean | UserCountOutputTypeCountPayoutRequestsArgs
+  payoutReviews?: boolean | UserCountOutputTypeCountPayoutReviewsArgs
 }
 
 /**
@@ -2020,6 +2396,20 @@ export type UserCountOutputTypeCountPasswordResetTokensArgs<ExtArgs extends runt
   where?: Prisma.PasswordResetTokenWhereInput
 }
 
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountPayoutRequestsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PayoutRequestWhereInput
+}
+
+/**
+ * UserCountOutputType without action
+ */
+export type UserCountOutputTypeCountPayoutReviewsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PayoutRequestWhereInput
+}
+
 
 export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -2044,6 +2434,8 @@ export type UserSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = r
   orders?: boolean | Prisma.User$ordersArgs<ExtArgs>
   addresses?: boolean | Prisma.User$addressesArgs<ExtArgs>
   passwordResetTokens?: boolean | Prisma.User$passwordResetTokensArgs<ExtArgs>
+  payoutRequests?: boolean | Prisma.User$payoutRequestsArgs<ExtArgs>
+  payoutReviews?: boolean | Prisma.User$payoutReviewsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["user"]>
 
@@ -2102,6 +2494,8 @@ export type UserInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   orders?: boolean | Prisma.User$ordersArgs<ExtArgs>
   addresses?: boolean | Prisma.User$addressesArgs<ExtArgs>
   passwordResetTokens?: boolean | Prisma.User$passwordResetTokensArgs<ExtArgs>
+  payoutRequests?: boolean | Prisma.User$payoutRequestsArgs<ExtArgs>
+  payoutReviews?: boolean | Prisma.User$payoutReviewsArgs<ExtArgs>
   _count?: boolean | Prisma.UserCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type UserIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {}
@@ -2121,6 +2515,8 @@ export type $UserPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs =
     orders: Prisma.$OrderPayload<ExtArgs>[]
     addresses: Prisma.$AddressPayload<ExtArgs>[]
     passwordResetTokens: Prisma.$PasswordResetTokenPayload<ExtArgs>[]
+    payoutRequests: Prisma.$PayoutRequestPayload<ExtArgs>[]
+    payoutReviews: Prisma.$PayoutRequestPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -2539,6 +2935,8 @@ export interface Prisma__UserClient<T, Null = never, ExtArgs extends runtime.Typ
   orders<T extends Prisma.User$ordersArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$ordersArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$OrderPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   addresses<T extends Prisma.User$addressesArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$addressesArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$AddressPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   passwordResetTokens<T extends Prisma.User$passwordResetTokensArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$passwordResetTokensArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PasswordResetTokenPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  payoutRequests<T extends Prisma.User$payoutRequestsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$payoutRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PayoutRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  payoutReviews<T extends Prisma.User$payoutReviewsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.User$payoutReviewsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PayoutRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -3213,6 +3611,54 @@ export type User$passwordResetTokensArgs<ExtArgs extends runtime.Types.Extension
   take?: number
   skip?: number
   distinct?: Prisma.PasswordResetTokenScalarFieldEnum | Prisma.PasswordResetTokenScalarFieldEnum[]
+}
+
+/**
+ * User.payoutRequests
+ */
+export type User$payoutRequestsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PayoutRequest
+   */
+  select?: Prisma.PayoutRequestSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PayoutRequest
+   */
+  omit?: Prisma.PayoutRequestOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PayoutRequestInclude<ExtArgs> | null
+  where?: Prisma.PayoutRequestWhereInput
+  orderBy?: Prisma.PayoutRequestOrderByWithRelationInput | Prisma.PayoutRequestOrderByWithRelationInput[]
+  cursor?: Prisma.PayoutRequestWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PayoutRequestScalarFieldEnum | Prisma.PayoutRequestScalarFieldEnum[]
+}
+
+/**
+ * User.payoutReviews
+ */
+export type User$payoutReviewsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PayoutRequest
+   */
+  select?: Prisma.PayoutRequestSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PayoutRequest
+   */
+  omit?: Prisma.PayoutRequestOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PayoutRequestInclude<ExtArgs> | null
+  where?: Prisma.PayoutRequestWhereInput
+  orderBy?: Prisma.PayoutRequestOrderByWithRelationInput | Prisma.PayoutRequestOrderByWithRelationInput[]
+  cursor?: Prisma.PayoutRequestWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PayoutRequestScalarFieldEnum | Prisma.PayoutRequestScalarFieldEnum[]
 }
 
 /**

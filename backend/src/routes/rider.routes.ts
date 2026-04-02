@@ -8,6 +8,7 @@ import {
   availabilitySchema,
   deliveryProofSchema,
   deliveryStatusUpdateSchema,
+  payoutRequestSchema,
   riderLocationSchema
 } from "../validators/commerce.validator";
 
@@ -15,6 +16,8 @@ const router = Router();
 
 router.use(authenticate, authorize(UserRole.RIDER));
 router.get("/profile", asyncHandler(riderController.profile));
+router.get("/payout-requests", asyncHandler(riderController.payoutRequests));
+router.post("/payout-requests", validate(payoutRequestSchema), asyncHandler(riderController.createPayoutRequest));
 router.patch("/availability", validate(availabilitySchema), asyncHandler(riderController.updateAvailability));
 router.patch("/location", validate(riderLocationSchema), asyncHandler(riderController.updateLocation));
 router.get("/jobs", asyncHandler(riderController.jobs));

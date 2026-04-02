@@ -8,6 +8,7 @@ import {
   createVendorRestaurantSchema,
   createMenuItemSchema,
   orderStatusUpdateSchema,
+  payoutRequestSchema,
   updateVendorRestaurantSchema,
   updateMenuItemSchema,
   vendorOperatingStateSchema,
@@ -19,11 +20,14 @@ const router = Router();
 router.use(authenticate, authorize(UserRole.VENDOR));
 router.get("/dashboard", asyncHandler(vendorController.dashboard));
 router.get("/settings", asyncHandler(vendorController.settings));
+router.get("/payout-requests", asyncHandler(vendorController.payoutRequests));
+router.post("/payout-requests", validate(payoutRequestSchema), asyncHandler(vendorController.createPayoutRequest));
 router.get("/restaurants/me", asyncHandler(vendorController.restaurantsMe));
 router.post("/restaurants", validate(createVendorRestaurantSchema), asyncHandler(vendorController.createRestaurant));
 router.patch("/restaurants/:restaurantId", validate(updateVendorRestaurantSchema), asyncHandler(vendorController.updateRestaurant));
 router.get("/orders", asyncHandler(vendorController.orders));
 router.get("/forecasts", asyncHandler(vendorController.forecasts));
+router.get("/insights", asyncHandler(vendorController.insights));
 router.patch(
   "/orders/:orderId/status",
   validate(orderStatusUpdateSchema),

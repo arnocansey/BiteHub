@@ -16,12 +16,130 @@ import {
 } from "../services/order-trust.service";
 import { ensureOrderSettlement } from "../services/settlement.service";
 
+function getEffectiveMenuItemPrice(item: any) {
+  const now = new Date();
+  const specialStartsAt = item.specialStartsAt ? new Date(item.specialStartsAt) : null;
+  const specialEndsAt = item.specialEndsAt ? new Date(item.specialEndsAt) : null;
+  const hasActiveSpecial =
+    typeof item.specialPrice !== "undefined" &&
+    item.specialPrice !== null &&
+    (!specialStartsAt || specialStartsAt <= now) &&
+    (!specialEndsAt || specialEndsAt >= now);
+
+  return Number(hasActiveSpecial ? item.specialPrice : item.price ?? 0);
+}
+
 export const orderController = {
   async checkout(req: Request, res: Response) {
     const restaurant = (await prisma.restaurant.findUnique({
       where: { id: req.body.restaurantId },
       include: { vendorProfile: true }
     })) as any;
+
+    if (!restaurant) {
+      return res.status(404).json({ message: "Restaurant not found." });
+    }
+
+    const requestedItems = req.body.items as Array<{
+      menuItemId: string;
+      quantity: number;
+      selectedOptionIds?: string[];
+      note?: string;
+    }>;
+
+    if (!requestedItems?.length) {
+      return res.status(400).json({ message: "Add at least one menu item to your order." });
+    }
+
+    const menuItemIds = requestedItems.map((item) => item.menuItemId);
+    const menuItems = await prisma.menuItem.findMany({
+      where: {
+        id: { in: menuItemIds },
+        restaurantId: restaurant.id
+      },
+      include: {
+        modifierGroups: {
+          include: {
+            options: {
+              where: { isAvailable: true },
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+            }
+          },
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+        }
+      }
+    } as any);
+
+    const menuItemMap = new Map(menuItems.map((item: any) => [item.id, item]));
+    let orderItems;
+    try {
+      orderItems = requestedItems.map((requestedItem) => {
+        const menuItem = menuItemMap.get(requestedItem.menuItemId);
+
+        if (!menuItem) {
+          throw new Error("One or more menu items are no longer available from this restaurant.");
+        }
+
+        const selectedOptionIds = Array.from(new Set(requestedItem.selectedOptionIds ?? []));
+        const selectedOptions = menuItem.modifierGroups.flatMap((group: any) =>
+          group.options.filter((option: any) => selectedOptionIds.includes(option.id)).map((option: any) => ({
+            ...option,
+            groupId: group.id,
+            groupName: group.name
+          }))
+        );
+
+        menuItem.modifierGroups.forEach((group: any) => {
+          const chosenInGroup = selectedOptions.filter((option: any) => option.groupId === group.id);
+          const count = chosenInGroup.length;
+          const minRequired = group.isRequired ? Math.max(group.minSelect ?? 1, 1) : group.minSelect ?? 0;
+          const maxAllowed = group.selectionType === "SINGLE" ? 1 : group.maxSelect ?? Number.POSITIVE_INFINITY;
+
+          if (count < minRequired) {
+            throw new Error(`Select ${group.name} before adding this item.`);
+          }
+
+          if (count > maxAllowed) {
+            throw new Error(`You selected too many options for ${group.name}.`);
+          }
+        });
+
+        const unitPrice =
+          getEffectiveMenuItemPrice(menuItem) +
+          selectedOptions.reduce((sum: number, option: any) => sum + Number(option.priceDelta ?? 0), 0);
+        const quantity = Number(requestedItem.quantity ?? 1);
+
+        return {
+          menuItemId: menuItem.id,
+          quantity,
+          unitPrice,
+          totalPrice: unitPrice * quantity,
+          itemNameSnapshot: menuItem.name,
+          customerNote: requestedItem.note?.trim() || null,
+          customizationSummary: {
+            groups: menuItem.modifierGroups.map((group: any) => ({
+              id: group.id,
+              name: group.name,
+              selectionType: group.selectionType,
+              selectedOptions: selectedOptions
+                .filter((option: any) => option.groupId === group.id)
+                .map((option: any) => ({
+                  id: option.id,
+                  name: option.name,
+                  priceDelta: Number(option.priceDelta ?? 0)
+                }))
+            }))
+          }
+        };
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error instanceof Error ? error.message : "Invalid menu customization." });
+    }
+
+    const subtotalAmount = orderItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const deliveryFee = Number(restaurant.deliveryFee ?? 0);
+    const discountAmount = 0;
+    const totalAmount = subtotalAmount + deliveryFee - discountAmount;
     const initialStatus = restaurant?.vendorProfile?.autoAcceptOrders ? OrderStatus.ACCEPTED : OrderStatus.PENDING;
 
     const order = await prisma.order.create({
@@ -31,16 +149,16 @@ export const orderController = {
         deliveryAddressId: req.body.deliveryAddressId,
         promoCodeId: req.body.promoCodeId,
         status: initialStatus,
-        subtotalAmount: req.body.subtotalAmount,
-        deliveryFee: req.body.deliveryFee,
-        discountAmount: req.body.discountAmount ?? 0,
-        totalAmount: req.body.totalAmount,
+        subtotalAmount,
+        deliveryFee,
+        discountAmount,
+        totalAmount,
         paymentMethod: req.body.paymentMethod ?? PaymentMethod.CASH,
         customerNotes: req.body.customerNotes,
-        items: { create: req.body.items },
+        items: { create: orderItems },
         payment: {
           create: {
-            amount: req.body.totalAmount,
+            amount: totalAmount,
             method: req.body.paymentMethod ?? PaymentMethod.CASH,
             provider:
               req.body.paymentMethod === PaymentMethod.CASH

@@ -19,7 +19,26 @@ type VendorDataBundle = {
   restaurantData: any[];
   menuData: any[];
   forecastData: any;
+  insightsData: any;
+  categoryData: any[];
   notificationData: any[];
+  payoutData: any;
+};
+type ModifierGroupDraft = {
+  id: string;
+  name: string;
+  description: string;
+  selectionType: "SINGLE" | "MULTIPLE";
+  isRequired: boolean;
+  minSelect: string;
+  maxSelect: string;
+  options: Array<{
+    id: string;
+    name: string;
+    priceDelta: string;
+    isDefault: boolean;
+    isAvailable: boolean;
+  }>;
 };
 const sessionStorageKey = "bitehub_vendor_session";
 const queryClient = new QueryClient({
@@ -63,6 +82,27 @@ const currencyFormatter = new Intl.NumberFormat("en-GH", {
 
 function formatMoney(value: number) {
   return currencyFormatter.format(Number(value ?? 0));
+}
+
+function createModifierGroupDraft(): ModifierGroupDraft {
+  return {
+    id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    name: "",
+    description: "",
+    selectionType: "MULTIPLE",
+    isRequired: false,
+    minSelect: "0",
+    maxSelect: "",
+    options: [
+      {
+        id: `option-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        name: "",
+        priceDelta: "0",
+        isDefault: false,
+        isAvailable: true
+      }
+    ]
+  };
 }
 
 const statusAccent: Record<string, { bg: string; text: string; label: string }> = {
@@ -139,6 +179,10 @@ function AppContent() {
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [menuItems, setMenuItems] = useState<any[]>([]);
   const [forecasts, setForecasts] = useState<any>(null);
+  const [insights, setInsights] = useState<any>(null);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [payoutSnapshot, setPayoutSnapshot] = useState<any>(null);
+  const [requestingPayout, setRequestingPayout] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [editingPayout, setEditingPayout] = useState(false);
   const [menuFormOpen, setMenuFormOpen] = useState(false);
@@ -161,7 +205,12 @@ function AppContent() {
     name: "",
     description: "",
     price: "",
+    categoryId: "",
     imageUrl: "",
+    specialPrice: "",
+    specialPriceLabel: "",
+    specialStartsAt: "",
+    specialEndsAt: "",
     preparationMins: "20",
     badgeText: "",
     spiceLevel: "",
@@ -169,6 +218,7 @@ function AppContent() {
     isSignature: false,
     isFeatured: false
   });
+  const [modifierDrafts, setModifierDrafts] = useState<ModifierGroupDraft[]>([]);
   const [editingRestaurantId, setEditingRestaurantId] = useState<string | null>(null);
   const [restaurantDraft, setRestaurantDraft] = useState({
     name: "",
@@ -184,6 +234,7 @@ function AppContent() {
   const [busyItemId, setBusyItemId] = useState<string | null>(null);
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
   const [busyRestaurantId, setBusyRestaurantId] = useState<string | null>(null);
+  const [lastAnnouncedOrderId, setLastAnnouncedOrderId] = useState<string | null>(null);
 
   async function refreshSessionTokens(activeSession: Session) {
     const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
@@ -252,7 +303,12 @@ function AppContent() {
       name: "",
       description: "",
       price: "",
+      categoryId: "",
       imageUrl: "",
+      specialPrice: "",
+      specialPriceLabel: "",
+      specialStartsAt: "",
+      specialEndsAt: "",
       preparationMins: "20",
       badgeText: "",
       spiceLevel: "",
@@ -260,21 +316,25 @@ function AppContent() {
       isSignature: false,
       isFeatured: false
     });
+    setModifierDrafts([]);
     setEditingItemId(null);
     setMenuFormOpen(false);
   }
 
   async function fetchVendorDataBundle(activeSession: Session): Promise<VendorDataBundle> {
-    const [dashboardData, orderData, restaurantData, menuData, forecastData, notificationData] = await Promise.all([
+    const [dashboardData, orderData, restaurantData, menuData, forecastData, insightsData, categoryData, notificationData, payoutData] = await Promise.all([
       request<any>("/vendors/dashboard", {}, activeSession),
       request<any[]>("/vendors/orders", {}, activeSession),
       request<any[]>("/vendors/restaurants/me", {}, activeSession),
       request<any[]>("/vendors/menu-items", {}, activeSession),
       request<any>("/vendors/forecasts", {}, activeSession),
-      request<any[]>("/notifications", {}, activeSession)
+      request<any>("/vendors/insights", {}, activeSession),
+      request<any[]>("/categories"),
+      request<any[]>("/notifications", {}, activeSession),
+      request<any>("/vendors/payout-requests", {}, activeSession)
     ]);
 
-    return { dashboardData, orderData, restaurantData, menuData, forecastData, notificationData };
+    return { dashboardData, orderData, restaurantData, menuData, forecastData, insightsData, categoryData, notificationData, payoutData };
   }
 
   function applyVendorBundle(bundle: VendorDataBundle) {
@@ -283,7 +343,10 @@ function AppContent() {
     setRestaurants(bundle.restaurantData);
     setMenuItems(bundle.menuData);
     setForecasts(bundle.forecastData);
+    setInsights(bundle.insightsData);
+    setCategories(bundle.categoryData);
     setNotifications(bundle.notificationData);
+    setPayoutSnapshot(bundle.payoutData);
     setSelectedRestaurantId((current) => current || bundle.restaurantData[0]?.id || "");
   }
 
@@ -531,7 +594,12 @@ function AppContent() {
       name: "",
       description: "",
       price: "",
+      categoryId: "",
       imageUrl: "",
+      specialPrice: "",
+      specialPriceLabel: "",
+      specialStartsAt: "",
+      specialEndsAt: "",
       preparationMins: "20",
       badgeText: "",
       spiceLevel: "",
@@ -539,6 +607,7 @@ function AppContent() {
       isSignature: false,
       isFeatured: false
     });
+    setModifierDrafts([]);
   }
 
   function resetRestaurantDraft() {
@@ -565,7 +634,12 @@ function AppContent() {
       name: item.name ?? "",
       description: item.description ?? "",
       price: String(Number(item.price ?? 0)),
+      categoryId: item.categoryId ?? "",
       imageUrl: item.imageUrl ?? "",
+      specialPrice: item.specialPrice ? String(Number(item.specialPrice)) : "",
+      specialPriceLabel: item.specialPriceLabel ?? "",
+      specialStartsAt: item.specialStartsAt ? new Date(item.specialStartsAt).toISOString().slice(0, 16) : "",
+      specialEndsAt: item.specialEndsAt ? new Date(item.specialEndsAt).toISOString().slice(0, 16) : "",
       preparationMins: String(item.preparationMins ?? 20),
       badgeText: item.badgeText ?? "",
       spiceLevel: item.spiceLevel ? String(item.spiceLevel) : "",
@@ -573,6 +647,36 @@ function AppContent() {
       isSignature: Boolean(item.isSignature),
       isFeatured: Boolean(item.isFeatured)
     });
+    setModifierDrafts(
+      Array.isArray(item.modifierGroups)
+        ? item.modifierGroups.map((group: any) => ({
+            id: group.id,
+            name: group.name ?? "",
+            description: group.description ?? "",
+            selectionType: group.selectionType === "SINGLE" ? "SINGLE" : "MULTIPLE",
+            isRequired: Boolean(group.isRequired),
+            minSelect: String(group.minSelect ?? 0),
+            maxSelect: typeof group.maxSelect === "number" ? String(group.maxSelect) : "",
+            options: Array.isArray(group.options) && group.options.length
+              ? group.options.map((option: any) => ({
+                  id: option.id,
+                  name: option.name ?? "",
+                  priceDelta: String(Number(option.priceDelta ?? 0)),
+                  isDefault: Boolean(option.isDefault),
+                  isAvailable: option.isAvailable !== false
+                }))
+              : [
+                  {
+                    id: `option-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                    name: "",
+                    priceDelta: "0",
+                    isDefault: false,
+                    isAvailable: true
+                  }
+                ]
+          }))
+        : []
+    );
   }
 
   function startEditRestaurant(restaurant: any) {
@@ -592,6 +696,77 @@ function AppContent() {
     });
   }
 
+  function addModifierGroup() {
+    setModifierDrafts((current) => [...current, createModifierGroupDraft()]);
+  }
+
+  function updateModifierGroup(groupId: string, updates: Partial<ModifierGroupDraft>) {
+    setModifierDrafts((current) =>
+      current.map((group) => (group.id === groupId ? { ...group, ...updates } : group))
+    );
+  }
+
+  function removeModifierGroup(groupId: string) {
+    setModifierDrafts((current) => current.filter((group) => group.id !== groupId));
+  }
+
+  function addModifierOption(groupId: string) {
+    setModifierDrafts((current) =>
+      current.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              options: [
+                ...group.options,
+                {
+                  id: `option-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                  name: "",
+                  priceDelta: "0",
+                  isDefault: false,
+                  isAvailable: true
+                }
+              ]
+            }
+          : group
+      )
+    );
+  }
+
+  function updateModifierOption(groupId: string, optionId: string, updates: Partial<ModifierGroupDraft["options"][number]>) {
+    setModifierDrafts((current) =>
+      current.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              options: group.options.map((option) =>
+                option.id === optionId
+                  ? {
+                      ...option,
+                      ...updates
+                    }
+                  : group.selectionType === "SINGLE" && updates.isDefault && option.isDefault
+                    ? { ...option, isDefault: false }
+                    : option
+              )
+            }
+          : group
+      )
+    );
+  }
+
+  function removeModifierOption(groupId: string, optionId: string) {
+    setModifierDrafts((current) =>
+      current.map((group) =>
+        group.id === groupId
+          ? {
+              ...group,
+              options: group.options.filter((option) => option.id !== optionId)
+            }
+          : group
+      )
+    );
+  }
+
   async function submitMenuItem() {
     if (!session || !selectedRestaurantId) {
       setError("Choose a restaurant before saving a menu item.");
@@ -601,22 +776,74 @@ function AppContent() {
     setBusyItemId(editingItemId ?? "new");
     setError(null);
     try {
+      const specialStartDate = menuDraft.specialStartsAt ? new Date(menuDraft.specialStartsAt) : null;
+      const specialEndDate = menuDraft.specialEndsAt ? new Date(menuDraft.specialEndsAt) : null;
+
+      if ((specialStartDate && Number.isNaN(specialStartDate.getTime())) || (specialEndDate && Number.isNaN(specialEndDate.getTime()))) {
+        throw new Error("Use a valid start and end date for special pricing.");
+      }
+
+      const normalizedModifierGroups = modifierDrafts
+        .map((group, groupIndex) => ({
+          name: group.name.trim(),
+          description: group.description.trim() || undefined,
+          selectionType: group.selectionType,
+          isRequired: group.isRequired,
+          minSelect: group.minSelect.trim() ? Number(group.minSelect) : 0,
+          maxSelect: group.maxSelect.trim() ? Number(group.maxSelect) : undefined,
+          sortOrder: groupIndex,
+          options: group.options
+            .map((option, optionIndex) => ({
+              name: option.name.trim(),
+              priceDelta: Number(option.priceDelta || "0"),
+              isDefault: option.isDefault,
+              isAvailable: option.isAvailable,
+              sortOrder: optionIndex
+            }))
+            .filter((option) => option.name)
+        }))
+        .filter((group) => group.name);
+
+      normalizedModifierGroups.forEach((group) => {
+        if (Number.isNaN(group.minSelect) || group.minSelect < 0) {
+          throw new Error(`Set a valid minimum selection for ${group.name}.`);
+        }
+
+        if (typeof group.maxSelect === "number" && (Number.isNaN(group.maxSelect) || group.maxSelect < group.minSelect)) {
+          throw new Error(`Set a valid maximum selection for ${group.name}.`);
+        }
+
+        if (!group.options.length) {
+          throw new Error(`Add at least one option under ${group.name}.`);
+        }
+      });
+
       const payload = {
         restaurantId: selectedRestaurantId,
+        categoryId: menuDraft.categoryId || undefined,
         name: menuDraft.name.trim(),
         description: menuDraft.description.trim() || undefined,
         price: Number(menuDraft.price),
+        specialPrice: menuDraft.specialPrice ? Number(menuDraft.specialPrice) : undefined,
+        specialPriceLabel: menuDraft.specialPriceLabel.trim() || undefined,
+        specialStartsAt: specialStartDate ? specialStartDate.toISOString() : undefined,
+        specialEndsAt: specialEndDate ? specialEndDate.toISOString() : undefined,
         imageUrl: menuDraft.imageUrl.trim() || undefined,
         preparationMins: Number(menuDraft.preparationMins || "20"),
         badgeText: menuDraft.badgeText.trim() || undefined,
         spiceLevel: menuDraft.spiceLevel ? Number(menuDraft.spiceLevel) : undefined,
         calories: menuDraft.calories ? Number(menuDraft.calories) : undefined,
         isSignature: menuDraft.isSignature,
-        isFeatured: menuDraft.isFeatured
+        isFeatured: menuDraft.isFeatured,
+        modifierGroups: normalizedModifierGroups
       };
 
       if (!payload.name || Number.isNaN(payload.price) || payload.price <= 0) {
         throw new Error("Add a valid item name and price.");
+      }
+
+      if (typeof payload.specialPrice === "number" && (Number.isNaN(payload.specialPrice) || payload.specialPrice <= 0)) {
+        throw new Error("Add a valid special price or leave it blank.");
       }
 
       if (editingItemId) {
@@ -751,12 +978,31 @@ function AppContent() {
           setMenuItems([]);
           setNotifications([]);
           setForecasts(null);
+          setPayoutSnapshot(null);
           setMenuFormOpen(false);
           setEditingItemId(null);
           setSelectedRestaurantId("");
         }
       }
     ]);
+  }
+
+  async function requestVendorPayout() {
+    if (!session) return;
+    setRequestingPayout(true);
+    setError(null);
+    try {
+      await request("/vendors/payout-requests", {
+        method: "POST",
+        body: JSON.stringify({})
+      }, session);
+      await loadVendorData(session);
+      setAuthMessage("Payout request sent to admin for approval.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to request vendor payout.");
+    } finally {
+      setRequestingPayout(false);
+    }
   }
 
   async function markNotificationRead(notificationId: string) {
@@ -810,14 +1056,22 @@ function AppContent() {
   const liveRestaurants = restaurants.filter((restaurant) => restaurant.operatingMode === "LIVE");
   const unreadNotifications = notifications.filter((notification) => !notification.isRead);
   const pendingOrders = orders.filter((order) => order.status === "PENDING");
+  const acceptedOrders = orders.filter((order) => order.status === "ACCEPTED");
+  const preparingOrders = orders.filter((order) => order.status === "PREPARING");
+  const readyOrders = orders.filter((order) => order.status === "READY_FOR_PICKUP");
   const deliveredOrders = orders.filter((order) => order.status === "DELIVERED");
+  const lostOrdersCount = orders.filter((order) => ["REJECTED", "CANCELLED"].includes(order.status)).length;
   const vendorPayoutForOrder = (order: any) => Number(order?.settlement?.vendorPayoutAmount ?? order?.subtotalAmount ?? 0);
   const grossSalesForOrder = (order: any) => Number(order?.settlement?.vendorGrossSales ?? order?.subtotalAmount ?? order?.totalAmount ?? 0);
+  const commissionForOrder = (order: any) => Number(order?.settlement?.vendorCommissionAmount ?? 0);
+  const feesForOrder = (order: any) => Number(order?.settlement?.taxAmount ?? 0) + Number(order?.settlement?.riderGrossDelivery ?? order?.deliveryFee ?? 0);
   const averageRating = restaurants.length
     ? restaurants.reduce((sum, restaurant) => sum + Number(restaurant.averageRating ?? 0), 0) / restaurants.length
     : 0;
   const payoutDue = useMemo(() => orders.reduce((sum, order) => sum + vendorPayoutForOrder(order), 0), [orders]);
   const grossSales = useMemo(() => orders.reduce((sum, order) => sum + grossSalesForOrder(order), 0), [orders]);
+  const commissionTotal = useMemo(() => orders.reduce((sum, order) => sum + commissionForOrder(order), 0), [orders]);
+  const taxAndDeliveryTotal = useMemo(() => orders.reduce((sum, order) => sum + feesForOrder(order), 0), [orders]);
   const topItems = useMemo(
     () => [...menuItems].sort((a, b) => Number(b?._count?.orderItems ?? 0) - Number(a?._count?.orderItems ?? 0)).slice(0, 5),
     [menuItems]
@@ -898,6 +1152,35 @@ function AppContent() {
     const max = Math.max(...totals, 1);
     return totals.map((value, index) => ({ label: labels[index], value, height: Math.max(12, Math.round((value / max) * 100)) }));
   }, [orders]);
+  const todayWindowStart = useMemo(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }, []);
+  const todaysOrders = useMemo(() => orders.filter((order) => new Date(order.placedAt) >= todayWindowStart), [orders, todayWindowStart]);
+  const todaysSales = useMemo(() => todaysOrders.reduce((sum, order) => sum + grossSalesForOrder(order), 0), [todaysOrders]);
+  const todaysMostPopularItem = useMemo(() => insights?.today?.mostPopularItem ?? null, [insights]);
+  const todaysAveragePrep = useMemo(() => insights?.today?.averagePrepTime ?? null, [insights]);
+  const peakHours = useMemo(() => insights?.peakHours ?? [], [insights]);
+  const reviewFeed = useMemo(() => insights?.reviews ?? [], [insights]);
+  const lostOrdersFeed = useMemo(() => insights?.lostOrders ?? [], [insights]);
+  const kitchenColumns = useMemo(
+    () => [
+      { key: "new", title: "New", tone: styles.kitchenColumnBlue, orders: pendingOrders },
+      { key: "preparing", title: "Preparing", tone: styles.kitchenColumnYellow, orders: [...acceptedOrders, ...preparingOrders] },
+      { key: "ready", title: "Ready for Pickup", tone: styles.kitchenColumnGreen, orders: readyOrders }
+    ],
+    [acceptedOrders, pendingOrders, preparingOrders, readyOrders]
+  );
+
+  useEffect(() => {
+    const newestPending = pendingOrders[0];
+    if (!newestPending || newestPending.id === lastAnnouncedOrderId) return;
+    setLastAnnouncedOrderId(newestPending.id);
+    Alert.alert(
+      "New Order Alert",
+      `${newestPending.customer?.firstName ?? "Customer"} placed a new order for ${newestPending.restaurant?.name ?? "your restaurant"}.`
+    );
+  }, [lastAnnouncedOrderId, pendingOrders]);
 
   useEffect(() => {
     if (!dashboard) return;
@@ -993,48 +1276,83 @@ function AppContent() {
 
         {activeTab === "dashboard" ? (
           <>
-            <View style={styles.heroCard}>
-              <Text style={styles.heroLabel}>Estimated payout</Text>
-              <Text style={styles.heroValue}>{formatMoney(payoutDue)}</Text>
-              <Text style={styles.heroSub}>Net vendor earnings after BiteHub commission across {orders.length} orders</Text>
+            <View style={styles.kitchenHero}>
+              <View style={styles.kitchenHeroTop}>
+                <View>
+                  <Text style={styles.kitchenHeroEyebrow}>The Live Kitchen</Text>
+                  <Text style={styles.kitchenHeroTitle}>Stay ahead of the rush.</Text>
+                  <Text style={styles.kitchenHeroCopy}>Large live lanes, loud new-order alerts, and a prep board built for tablets on the counter.</Text>
+                </View>
+                <View style={[styles.kitchenAlertPill, pendingOrders.length ? styles.kitchenAlertHot : null]}>
+                  <Ionicons name="flame-outline" size={16} color={pendingOrders.length ? "#ffffff" : "#fecaca"} />
+                  <Text style={styles.kitchenAlertText}>{pendingOrders.length} in the heat</Text>
+                </View>
+              </View>
+              <View style={styles.kitchenScoreRow}>
+                <View style={styles.kitchenScoreCard}>
+                  <Text style={styles.kitchenScoreLabel}>Today's sales</Text>
+                  <Text style={styles.kitchenScoreValue}>{formatMoney(todaysSales)}</Text>
+                </View>
+                <View style={styles.kitchenScoreCard}>
+                  <Text style={styles.kitchenScoreLabel}>Popular item</Text>
+                  <Text style={styles.kitchenScoreValueSmall}>{todaysMostPopularItem?.name ?? "No leader yet"}</Text>
+                </View>
+                <View style={styles.kitchenScoreCard}>
+                  <Text style={styles.kitchenScoreLabel}>Avg prep</Text>
+                  <Text style={styles.kitchenScoreValue}>{todaysAveragePrep ? `${todaysAveragePrep} min` : "--"}</Text>
+                </View>
+              </View>
             </View>
 
-            <View style={styles.statGrid}>
-              {[
-                { label: "Orders Today", value: String(orders.length), sub: `${pendingOrders.length} pending`, icon: "receipt-outline", color: "#3b82f6" },
-                { label: "Avg. Rating", value: averageRating ? averageRating.toFixed(1) : "--", sub: `${restaurants.length} restaurants`, icon: "star-outline", color: "#f59e0b" },
-                { label: "Menu Items", value: String(menuItems.length), sub: `${topItems.length} active leaders`, icon: "restaurant-outline", color: "#f97316" },
-                { label: "Delivered", value: String(deliveredOrders.length), sub: "Completed fulfillment", icon: "checkmark-circle-outline", color: "#22c55e" }
-              ].map((card) => (
-                <View key={card.label} style={styles.statCard}>
-                  <View style={[styles.statIcon, { backgroundColor: card.color }]}>
-                    <Ionicons name={card.icon as any} size={16} color="#ffffff" />
+            <View style={styles.kitchenBoard}>
+              {kitchenColumns.map((column) => (
+                <View key={column.key} style={[styles.kitchenColumn, column.tone]}>
+                  <View style={styles.kitchenColumnHeader}>
+                    <Text style={styles.kitchenColumnTitle}>{column.title}</Text>
+                    <Text style={styles.kitchenColumnCount}>{column.orders.length}</Text>
                   </View>
-                  <Text style={styles.statValue}>{card.value}</Text>
-                  <Text style={styles.statLabel}>{card.label}</Text>
-                  <Text style={styles.statSub}>{card.sub}</Text>
+                  {column.orders.length ? column.orders.slice(0, 6).map((order: any) => (
+                    <View key={order.id} style={styles.kitchenTicket}>
+                      <Text style={styles.kitchenTicketId}>{order.id.slice(-8).toUpperCase()}</Text>
+                      <Text style={styles.kitchenTicketCustomer}>{order.customer?.firstName ?? "Customer"} {order.customer?.lastName ?? ""}</Text>
+                      <Text style={styles.kitchenTicketMeta} numberOfLines={2}>
+                        {(order.items ?? []).map((item: any) => `${item.menuItem?.name ?? "Item"} x${item.quantity}`).join(", ")}
+                      </Text>
+                      <Text style={styles.kitchenTicketMeta}>
+                        {order.delivery?.pickupEtaMins ? `Driver ${order.delivery.pickupEtaMins} mins away` : "Awaiting driver pickup"}
+                      </Text>
+                      <View style={styles.actionRow}>
+                        {order.status === "PENDING" ? <Pressable style={styles.kitchenActionButton} onPress={() => void updateOrderStatus(order.id, "ACCEPTED")}><Text style={styles.kitchenActionButtonText}>{busyOrderId === order.id ? "..." : "Accept"}</Text></Pressable> : null}
+                        {(order.status === "ACCEPTED" || order.status === "PREPARING") ? <Pressable style={styles.kitchenActionButton} onPress={() => void updateOrderStatus(order.id, order.status === "ACCEPTED" ? "PREPARING" : "READY_FOR_PICKUP")}><Text style={styles.kitchenActionButtonText}>{busyOrderId === order.id ? "..." : order.status === "ACCEPTED" ? "Start Prep" : "Mark Ready"}</Text></Pressable> : null}
+                      </View>
+                    </View>
+                  )) : <Text style={styles.emptyText}>Nothing in this lane right now.</Text>}
                 </View>
               ))}
             </View>
 
             <View style={styles.panel}>
               <View style={styles.panelHeader}>
-                <Text style={styles.panelTitle}>New Orders</Text>
-                <Pressable onPress={() => setActiveTab("orders")}><Text style={styles.inlineAction}>View all</Text></Pressable>
+                <Text style={styles.panelTitle}>Today's Scorecard</Text>
+                <Pressable onPress={() => setActiveTab("analytics")}><Text style={styles.inlineAction}>Open insights</Text></Pressable>
               </View>
-              {pendingOrders.length ? pendingOrders.slice(0, 4).map((order) => (
-                <View key={order.id} style={styles.orderCardCompact}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{order.id}</Text>
-                    <Text style={styles.cardMeta}>{order.customer?.firstName ?? "Customer"} {order.customer?.lastName ?? ""}</Text>
-                    <Text style={styles.cardMeta}>{(order.items ?? []).map((item: any) => `${item.menuItem?.name ?? "Item"} x${item.quantity}`).join(", ") || "No order items"}</Text>
-                    <Text style={styles.metric}>{formatMoney(Number(order.totalAmount ?? 0))}</Text>
+              <View style={styles.statGrid}>
+                {[
+                  { label: "Orders", value: String(todaysOrders.length), sub: `${pendingOrders.length} new right now`, icon: "receipt-outline", color: "#3b82f6" },
+                  { label: "Rating", value: averageRating ? averageRating.toFixed(1) : "--", sub: `${reviewFeed.length} recent reviews`, icon: "star-outline", color: "#f59e0b" },
+                  { label: "Menu Live", value: String(menuItems.filter((item) => item.status === "AVAILABLE").length), sub: `${menuItems.length} total items`, icon: "restaurant-outline", color: "#f97316" },
+                  { label: "Lost Orders", value: String(lostOrdersCount), sub: "Rejected or cancelled", icon: "close-circle-outline", color: "#ef4444" }
+                ].map((card) => (
+                  <View key={card.label} style={styles.statCard}>
+                    <View style={[styles.statIcon, { backgroundColor: card.color }]}>
+                      <Ionicons name={card.icon as any} size={16} color="#ffffff" />
+                    </View>
+                    <Text style={styles.statValue}>{card.value}</Text>
+                    <Text style={styles.statLabel}>{card.label}</Text>
+                    <Text style={styles.statSub}>{card.sub}</Text>
                   </View>
-                  <Pressable style={styles.primaryMiniButton} onPress={() => void updateOrderStatus(order.id, "ACCEPTED")}>
-                    <Text style={styles.primaryMiniButtonText}>{busyOrderId === order.id ? "..." : "Accept"}</Text>
-                  </Pressable>
-                </View>
-              )) : <Text style={styles.emptyText}>No new orders right now.</Text>}
+                ))}
+              </View>
             </View>
 
             <View style={styles.panel}>
@@ -1141,6 +1459,16 @@ function AppContent() {
                 </ScrollView>
                 <TextInput value={menuDraft.name} onChangeText={(value) => setMenuDraft((current) => ({ ...current, name: value }))} placeholder="Item name" placeholderTextColor="#9ca3af" style={styles.input} />
                 <TextInput value={menuDraft.description} onChangeText={(value) => setMenuDraft((current) => ({ ...current, description: value }))} placeholder="Description" placeholderTextColor="#9ca3af" style={styles.input} multiline />
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.restaurantChoiceRow}>
+                  <Pressable style={[styles.restaurantChoice, !menuDraft.categoryId && styles.restaurantChoiceActive]} onPress={() => setMenuDraft((current) => ({ ...current, categoryId: "" }))}>
+                    <Text style={[styles.restaurantChoiceText, !menuDraft.categoryId && styles.restaurantChoiceTextActive]}>No category</Text>
+                  </Pressable>
+                  {categories.map((category) => (
+                    <Pressable key={category.id} style={[styles.restaurantChoice, menuDraft.categoryId === category.id && styles.restaurantChoiceActive]} onPress={() => setMenuDraft((current) => ({ ...current, categoryId: category.id }))}>
+                      <Text style={[styles.restaurantChoiceText, menuDraft.categoryId === category.id && styles.restaurantChoiceTextActive]}>{category.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
                 <View style={styles.imagePickerRow}>
                   {menuDraft.imageUrl ? <Image source={{ uri: menuDraft.imageUrl }} style={styles.menuPreviewImage} resizeMode="cover" /> : <View style={styles.menuPreviewPlaceholder}><Ionicons name="image-outline" size={20} color="#9ca3af" /></View>}
                   <View style={{ flex: 1 }}>
@@ -1152,6 +1480,15 @@ function AppContent() {
                 </View>
                 <TextInput value={menuDraft.imageUrl} onChangeText={(value) => setMenuDraft((current) => ({ ...current, imageUrl: value }))} placeholder="Image URL (optional)" placeholderTextColor="#9ca3af" style={styles.input} autoCapitalize="none" />
                 <TextInput value={menuDraft.price} onChangeText={(value) => setMenuDraft((current) => ({ ...current, price: value }))} placeholder="Price (GHS)" placeholderTextColor="#9ca3af" style={styles.input} keyboardType="numeric" />
+                <Text style={styles.cardMetaStrong}>Dynamic Pricing</Text>
+                <View style={styles.inlineInputs}>
+                  <TextInput value={menuDraft.specialPrice} onChangeText={(value) => setMenuDraft((current) => ({ ...current, specialPrice: value }))} placeholder="Special price" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} keyboardType="numeric" />
+                  <TextInput value={menuDraft.specialPriceLabel} onChangeText={(value) => setMenuDraft((current) => ({ ...current, specialPriceLabel: value }))} placeholder="Label e.g. Happy Hour" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} />
+                </View>
+                <View style={styles.inlineInputs}>
+                  <TextInput value={menuDraft.specialStartsAt} onChangeText={(value) => setMenuDraft((current) => ({ ...current, specialStartsAt: value }))} placeholder="Starts YYYY-MM-DDTHH:mm" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} autoCapitalize="none" />
+                  <TextInput value={menuDraft.specialEndsAt} onChangeText={(value) => setMenuDraft((current) => ({ ...current, specialEndsAt: value }))} placeholder="Ends YYYY-MM-DDTHH:mm" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} autoCapitalize="none" />
+                </View>
                 <TextInput value={menuDraft.preparationMins} onChangeText={(value) => setMenuDraft((current) => ({ ...current, preparationMins: value }))} placeholder="Preparation minutes" placeholderTextColor="#9ca3af" style={styles.input} keyboardType="numeric" />
                 <TextInput value={menuDraft.badgeText} onChangeText={(value) => setMenuDraft((current) => ({ ...current, badgeText: value }))} placeholder="Badge text (optional)" placeholderTextColor="#9ca3af" style={styles.input} />
                 <View style={styles.inlineInputs}>
@@ -1165,6 +1502,70 @@ function AppContent() {
                   <Pressable style={[styles.toggleChip, menuDraft.isFeatured && styles.toggleChipActive]} onPress={() => setMenuDraft((current) => ({ ...current, isFeatured: !current.isFeatured }))}>
                     <Text style={[styles.toggleChipText, menuDraft.isFeatured && styles.toggleChipTextActive]}>Featured</Text>
                   </Pressable>
+                </View>
+                <View style={styles.modifierPanel}>
+                  <View style={styles.panelHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.panelTitle}>Item Options</Text>
+                      <Text style={styles.cardMeta}>Build required choices, packaging, toppings, and add-ons from real vendor data.</Text>
+                    </View>
+                    <Pressable style={styles.primaryMiniButton} onPress={addModifierGroup}>
+                      <Text style={styles.primaryMiniButtonText}>Add Group</Text>
+                    </Pressable>
+                  </View>
+                  {modifierDrafts.length ? modifierDrafts.map((group) => (
+                    <View key={group.id} style={styles.modifierGroupCard}>
+                      <View style={styles.panelHeader}>
+                        <Text style={styles.rowTitle}>Modifier Group</Text>
+                        <Pressable onPress={() => removeModifierGroup(group.id)}>
+                          <Text style={styles.inlineAction}>Remove</Text>
+                        </Pressable>
+                      </View>
+                      <TextInput value={group.name} onChangeText={(value) => updateModifierGroup(group.id, { name: value })} placeholder="Group name e.g. Preferred choice" placeholderTextColor="#9ca3af" style={styles.input} />
+                      <TextInput value={group.description} onChangeText={(value) => updateModifierGroup(group.id, { description: value })} placeholder="Help text for customers" placeholderTextColor="#9ca3af" style={styles.input} />
+                      <View style={styles.actionRow}>
+                        <Pressable style={[styles.toggleChip, group.selectionType === "SINGLE" && styles.toggleChipActive]} onPress={() => updateModifierGroup(group.id, { selectionType: "SINGLE" })}>
+                          <Text style={[styles.toggleChipText, group.selectionType === "SINGLE" && styles.toggleChipTextActive]}>Single choice</Text>
+                        </Pressable>
+                        <Pressable style={[styles.toggleChip, group.selectionType === "MULTIPLE" && styles.toggleChipActive]} onPress={() => updateModifierGroup(group.id, { selectionType: "MULTIPLE" })}>
+                          <Text style={[styles.toggleChipText, group.selectionType === "MULTIPLE" && styles.toggleChipTextActive]}>Multiple choice</Text>
+                        </Pressable>
+                        <Pressable style={[styles.toggleChip, group.isRequired && styles.toggleChipActive]} onPress={() => updateModifierGroup(group.id, { isRequired: !group.isRequired })}>
+                          <Text style={[styles.toggleChipText, group.isRequired && styles.toggleChipTextActive]}>Required</Text>
+                        </Pressable>
+                      </View>
+                      <View style={styles.inlineInputs}>
+                        <TextInput value={group.minSelect} onChangeText={(value) => updateModifierGroup(group.id, { minSelect: value })} placeholder="Min select" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} keyboardType="numeric" />
+                        <TextInput value={group.maxSelect} onChangeText={(value) => updateModifierGroup(group.id, { maxSelect: value })} placeholder="Max select" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} keyboardType="numeric" />
+                      </View>
+                      <View style={{ marginTop: 10, gap: 10 }}>
+                        {group.options.map((option) => (
+                          <View key={option.id} style={styles.modifierOptionCard}>
+                            <View style={styles.inlineInputs}>
+                              <TextInput value={option.name} onChangeText={(value) => updateModifierOption(group.id, option.id, { name: value })} placeholder="Option name" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} />
+                              <TextInput value={option.priceDelta} onChangeText={(value) => updateModifierOption(group.id, option.id, { priceDelta: value })} placeholder="Extra price" placeholderTextColor="#9ca3af" style={[styles.input, styles.halfInput]} keyboardType="numeric" />
+                            </View>
+                            <View style={styles.actionRow}>
+                              <Pressable style={[styles.toggleChip, option.isDefault && styles.toggleChipActive]} onPress={() => updateModifierOption(group.id, option.id, { isDefault: !option.isDefault })}>
+                                <Text style={[styles.toggleChipText, option.isDefault && styles.toggleChipTextActive]}>{group.selectionType === "SINGLE" ? "Default option" : "Preselect"}</Text>
+                              </Pressable>
+                              <Pressable style={[styles.toggleChip, option.isAvailable && styles.toggleChipActive]} onPress={() => updateModifierOption(group.id, option.id, { isAvailable: !option.isAvailable })}>
+                                <Text style={[styles.toggleChipText, option.isAvailable && styles.toggleChipTextActive]}>Available</Text>
+                              </Pressable>
+                              <Pressable style={styles.outlineButton} onPress={() => removeModifierOption(group.id, option.id)}>
+                                <Text style={styles.outlineButtonText}>Remove option</Text>
+                              </Pressable>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                      <Pressable style={[styles.outlineButton, { alignSelf: "flex-start", marginTop: 12 }]} onPress={() => addModifierOption(group.id)}>
+                        <Text style={styles.outlineButtonText}>Add option</Text>
+                      </Pressable>
+                    </View>
+                  )) : (
+                    <Text style={styles.emptyText}>No item options yet. Add a group to support sizes, packaging, toppings, or add-ons.</Text>
+                  )}
                 </View>
                 <View style={styles.actionRow}>
                   <Pressable style={styles.primaryMiniButton} onPress={() => void submitMenuItem()}>
@@ -1186,10 +1587,21 @@ function AppContent() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rowTitle}>{item.name}</Text>
                       <Text style={styles.metric}>{formatMoney(Number(item.price ?? 0))}</Text>
+                      {item.specialPrice ? (
+                        <Text style={styles.cardMetaStrong}>
+                          {item.specialPriceLabel ?? "Special"}: {formatMoney(Number(item.specialPrice))}
+                        </Text>
+                      ) : null}
                       <Text style={styles.cardMeta}>{item._count?.orderItems ?? 0} orders total</Text>
+                      <Text style={styles.cardMeta}>
+                        {Array.isArray(item.modifierGroups) && item.modifierGroups.length
+                          ? `${item.modifierGroups.length} option groups configured`
+                          : "No option groups configured"}
+                      </Text>
                       <Text style={styles.cardMeta}>{item.description ?? "No description yet."}</Text>
                     </View>
                     <View style={styles.iconActionColumn}>
+                      <Text style={styles.killSwitchLabel}>{item.status === "AVAILABLE" ? "Live" : "Off"}</Text>
                       <Pressable onPress={() => void toggleItemAvailability(item)}>
                         <Ionicons name={item.status === "AVAILABLE" ? "eye-outline" : "eye-off-outline"} size={20} color={item.status === "AVAILABLE" ? "#16a34a" : "#9ca3af"} />
                       </Pressable>
@@ -1211,11 +1623,11 @@ function AppContent() {
           <>
             <View style={styles.analyticsGrid}>
               {[
-                { label: "Vendor Payout", value: formatMoney(payoutDue), sub: "Net amount due after BiteHub commission" },
-                { label: "Total Orders", value: String(orders.length), sub: `${deliveredOrders.length} delivered` },
                 { label: "Gross Sales", value: formatMoney(grossSales), sub: "Customer food spend before platform deductions" },
-                { label: "Avg. Order Value", value: orders.length ? formatMoney(Math.round(grossSales / orders.length)) : formatMoney(0), sub: "Average gross food value per order" },
-                { label: "Menu Reach", value: String(menuItems.length), sub: "Active menu items tracked" }
+                { label: "BiteHub Commission", value: formatMoney(commissionTotal), sub: "Deducted from food sales" },
+                { label: "Tax & Delivery Fees", value: formatMoney(taxAndDeliveryTotal), sub: "Operational deductions and taxes" },
+                { label: "Net Payout", value: formatMoney(payoutDue), sub: "Actual vendor amount due" },
+                { label: "Avg. Order Value", value: orders.length ? formatMoney(Math.round(grossSales / orders.length)) : formatMoney(0), sub: `${deliveredOrders.length} delivered orders` }
               ].map((item) => (
                 <View key={item.label} style={styles.panel}>
                   <Text style={styles.cardMeta}>{item.label}</Text>
@@ -1226,15 +1638,31 @@ function AppContent() {
             </View>
 
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Revenue by Day</Text>
+              <Text style={styles.panelTitle}>Peak Hours</Text>
               <View style={styles.barRow}>
-                {weeklyRevenue.map((day, index) => (
+                {(peakHours.length ? peakHours : weeklyRevenue.map((day, index) => ({ label: day.label, ordersCount: index + 1 }))).map((day: any, index: number, arr: any[]) => {
+                  const max = Math.max(...arr.map((item: any) => item.ordersCount), 1);
+                  const height = Math.max(12, Math.round((day.ordersCount / max) * 100));
+                  return (
                   <View key={`${day.label}-${index}`} style={styles.barItem}>
-                    <View style={[styles.barFill, index === weeklyRevenue.length - 2 ? styles.barFillActive : null, { height: `${day.height}%` }]} />
+                    <View style={[styles.barFill, index === 0 ? styles.barFillActive : null, { height: `${height}%` }]} />
                     <Text style={styles.barLabel}>{day.label}</Text>
                   </View>
-                ))}
+                )})}
               </View>
+            </View>
+
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Customer Reviews</Text>
+              {reviewFeed.length ? reviewFeed.map((review: any) => (
+                <View key={review.id} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{review.restaurant?.name ?? "Restaurant"} • {review.rating}/5</Text>
+                    <Text style={styles.cardMeta}>{review.user?.firstName ?? "Customer"} {review.user?.lastName ?? ""}</Text>
+                    <Text style={styles.cardMeta}>{review.comment ?? "Customer left a rating without a written note."}</Text>
+                  </View>
+                </View>
+              )) : <Text style={styles.emptyText}>Reviews will appear here as customers rate your food.</Text>}
             </View>
 
             <View style={styles.panel}>
@@ -1251,16 +1679,30 @@ function AppContent() {
             </View>
 
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>Quality Signals</Text>
-              {(forecasts?.qualityScores ?? []).length ? (forecasts?.qualityScores ?? []).map((score: any) => (
-                <View key={score.id} style={styles.listRow}>
+              <Text style={styles.panelTitle}>Lost Orders</Text>
+              {lostOrdersFeed.length ? lostOrdersFeed.map((order: any) => (
+                <View key={order.id} style={styles.listRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{score.scoreType}</Text>
-                    <Text style={styles.cardMeta}>{score.notes ?? "Latest vendor quality snapshot"}</Text>
+                    <Text style={styles.rowTitle}>{order.restaurantName} • {String(order.status).replaceAll("_", " ")}</Text>
+                    <Text style={styles.cardMeta}>{order.reason}</Text>
                   </View>
-                  <Text style={styles.metric}>{Number(score.scoreValue ?? 0).toFixed(1)}</Text>
+                  <Text style={styles.metric}>{formatMoney(Number(order.amount ?? 0))}</Text>
                 </View>
-              )) : <Text style={styles.emptyText}>No quality scores yet.</Text>}
+              )) : <Text style={styles.emptyText}>No cancelled or rejected orders right now.</Text>}
+            </View>
+
+            <View style={styles.panel}>
+              <Text style={styles.panelTitle}>Payout History</Text>
+              {Array.isArray(payoutSnapshot?.requests) && payoutSnapshot.requests.length ? payoutSnapshot.requests.map((item: any) => (
+                <View key={item.id} style={styles.listRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>Invoice #{String(item.id).slice(-8).toUpperCase()}</Text>
+                    <Text style={styles.cardMeta}>{String(item.status).replaceAll("_", " ")} • {new Date(item.createdAt).toLocaleDateString()}</Text>
+                    <Text style={styles.cardMeta}>{item.adminNote ?? "Payout request recorded for accounting."}</Text>
+                  </View>
+                  <Text style={styles.metric}>{formatMoney(Number(item.approvedAmount ?? item.requestedAmount ?? 0))}</Text>
+                </View>
+              )) : <Text style={styles.emptyText}>Payout requests and approvals will appear here.</Text>}
             </View>
           </>
         ) : null}
@@ -1477,6 +1919,39 @@ function AppContent() {
                       </View>
                     </View>
                   )}
+                  <View style={[styles.payoutCard, { marginTop: 12 }]}>
+                    <View style={styles.settingIcon}><Ionicons name="wallet-outline" size={18} color="#6b7280" /></View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle}>Request Vendor Payout</Text>
+                      <Text style={styles.cardMeta}>
+                        Available now: {formatMoney(Number(payoutSnapshot?.availableAmount ?? 0))}
+                      </Text>
+                      <Text style={styles.cardMeta}>
+                        Pending approval: {formatMoney(Number(payoutSnapshot?.pendingAmount ?? 0))} • Approved: {formatMoney(Number(payoutSnapshot?.approvedAmount ?? 0))}
+                      </Text>
+                    </View>
+                  </View>
+                  <Pressable
+                    style={[styles.primaryMiniButton, { marginTop: 12, opacity: payoutSnapshot?.canRequest ? 1 : 0.55 }]}
+                    onPress={() => void requestVendorPayout()}
+                    disabled={!payoutSnapshot?.canRequest || requestingPayout}
+                  >
+                    <Text style={styles.primaryMiniButtonText}>
+                      {requestingPayout ? "Requesting..." : "Request payout approval"}
+                    </Text>
+                  </Pressable>
+                  {Array.isArray(payoutSnapshot?.requests) && payoutSnapshot.requests.length ? (
+                    <View style={{ marginTop: 14, gap: 8 }}>
+                      {payoutSnapshot.requests.slice(0, 3).map((item: any) => (
+                        <View key={item.id} style={styles.listRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.rowTitle}>{formatMoney(Number(item.approvedAmount ?? item.requestedAmount ?? 0))}</Text>
+                            <Text style={styles.cardMeta}>{String(item.status).replaceAll("_", " ")} • {new Date(item.createdAt).toLocaleDateString()}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </View>
               </>
             ) : (
@@ -1560,6 +2035,33 @@ const styles = StyleSheet.create({
   heroLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: "#fdba74" },
   heroValue: { marginTop: 8, fontSize: 34, fontWeight: "800", color: "#fff" },
   heroSub: { marginTop: 8, fontSize: 13, color: "#d1d5db" },
+  kitchenHero: { marginBottom: 14, borderRadius: 30, backgroundColor: "#111827", padding: 22 },
+  kitchenHeroTop: { flexDirection: "row", justifyContent: "space-between", gap: 14 },
+  kitchenHeroEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: "#fca5a5" },
+  kitchenHeroTitle: { marginTop: 8, fontSize: 30, fontWeight: "900", color: "#ffffff" },
+  kitchenHeroCopy: { marginTop: 8, maxWidth: 260, fontSize: 13, lineHeight: 19, color: "#d1d5db" },
+  kitchenAlertPill: { flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 999, backgroundColor: "#3f1d1d", paddingHorizontal: 12, paddingVertical: 9, alignSelf: "flex-start" },
+  kitchenAlertHot: { backgroundColor: "#dc2626" },
+  kitchenAlertText: { color: "#fee2e2", fontSize: 12, fontWeight: "800" },
+  kitchenScoreRow: { marginTop: 18, gap: 10 },
+  kitchenScoreCard: { borderRadius: 22, backgroundColor: "#1f2937", padding: 14 },
+  kitchenScoreLabel: { color: "#9ca3af", fontSize: 12, fontWeight: "700" },
+  kitchenScoreValue: { marginTop: 6, color: "#ffffff", fontSize: 24, fontWeight: "900" },
+  kitchenScoreValueSmall: { marginTop: 6, color: "#ffffff", fontSize: 18, fontWeight: "800" },
+  kitchenBoard: { gap: 12, marginBottom: 14 },
+  kitchenColumn: { borderRadius: 24, padding: 14 },
+  kitchenColumnBlue: { backgroundColor: "#dbeafe" },
+  kitchenColumnYellow: { backgroundColor: "#fef3c7" },
+  kitchenColumnGreen: { backgroundColor: "#dcfce7" },
+  kitchenColumnHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  kitchenColumnTitle: { color: "#111827", fontSize: 17, fontWeight: "900" },
+  kitchenColumnCount: { color: "#111827", fontSize: 20, fontWeight: "900" },
+  kitchenTicket: { borderRadius: 18, backgroundColor: "rgba(255,255,255,0.7)", padding: 12, marginBottom: 10 },
+  kitchenTicketId: { color: "#111827", fontSize: 11, fontWeight: "800", letterSpacing: 1 },
+  kitchenTicketCustomer: { marginTop: 4, color: "#111827", fontSize: 16, fontWeight: "900" },
+  kitchenTicketMeta: { marginTop: 4, color: "#374151", fontSize: 12, lineHeight: 18 },
+  kitchenActionButton: { marginTop: 2, borderRadius: 16, backgroundColor: "#111827", paddingHorizontal: 14, paddingVertical: 10 },
+  kitchenActionButtonText: { color: "#ffffff", fontSize: 12, fontWeight: "800" },
   statGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 14 },
   statCard: { width: "47%", borderRadius: 22, backgroundColor: "#fff", padding: 16 },
   statIcon: { width: 36, height: 36, borderRadius: 14, alignItems: "center", justifyContent: "center", marginBottom: 10 },
@@ -1582,6 +2084,7 @@ const styles = StyleSheet.create({
   rowTitle: { fontSize: 14, fontWeight: "800", color: "#111827" },
   cardMetaStrong: { fontSize: 12, lineHeight: 18, color: "#111827", fontWeight: "700" },
   metric: { marginTop: 6, fontSize: 14, fontWeight: "800", color: "#f97316" },
+  killSwitchLabel: { fontSize: 10, fontWeight: "800", color: "#6b7280", textTransform: "uppercase" },
   rankChip: { width: 28, textAlign: "center", color: "#9ca3af", fontSize: 11, fontWeight: "800" },
   filterRow: { gap: 8, paddingBottom: 10 },
   filterChip: { borderRadius: 16, backgroundColor: "#ffffff", paddingHorizontal: 14, paddingVertical: 9 },
@@ -1607,6 +2110,9 @@ const styles = StyleSheet.create({
   menuPreviewPlaceholder: { width: 72, height: 72, borderRadius: 18, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center" },
   inlineInputs: { flexDirection: "row", gap: 10 },
   halfInput: { flex: 1 },
+  modifierPanel: { marginTop: 16, borderTopWidth: 1, borderTopColor: "#f3f4f6", paddingTop: 16 },
+  modifierGroupCard: { marginTop: 12, borderRadius: 20, backgroundColor: "#f9fafb", padding: 14 },
+  modifierOptionCard: { borderRadius: 16, backgroundColor: "#ffffff", padding: 12 },
   toggleChip: { borderRadius: 16, backgroundColor: "#f3f4f6", paddingHorizontal: 14, paddingVertical: 10 },
   toggleChipActive: { backgroundColor: "#fff7ed" },
   toggleChipText: { color: "#6b7280", fontSize: 12, fontWeight: "700" },

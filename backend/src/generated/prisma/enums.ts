@@ -188,3 +188,29 @@ export const DispatchMode = {
 } as const
 
 export type DispatchMode = (typeof DispatchMode)[keyof typeof DispatchMode]
+
+
+export const ModifierSelectionType = {
+  SINGLE: 'SINGLE',
+  MULTIPLE: 'MULTIPLE'
+} as const
+
+export type ModifierSelectionType = (typeof ModifierSelectionType)[keyof typeof ModifierSelectionType]
+
+
+export const PayoutRequestStatus = {
+  PENDING: 'PENDING',
+  APPROVED: 'APPROVED',
+  REJECTED: 'REJECTED',
+  PAID: 'PAID'
+} as const
+
+export type PayoutRequestStatus = (typeof PayoutRequestStatus)[keyof typeof PayoutRequestStatus]
+
+
+export const PayoutRequestTarget = {
+  VENDOR: 'VENDOR',
+  RIDER: 'RIDER'
+} as const
+
+export type PayoutRequestTarget = (typeof PayoutRequestTarget)[keyof typeof PayoutRequestTarget]

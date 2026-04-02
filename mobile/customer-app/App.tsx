@@ -16,6 +16,21 @@ type AuthMode = "signin" | "signup" | "forgot";
 type PaymentMethod = "CASH" | "CARD" | "MOBILE_MONEY";
 type Session = { accessToken: string; refreshToken: string; user: { role: string; firstName: string; lastName: string; email: string } };
 type PublicDataBundle = { restaurantData: any[]; collectionData: any[] };
+type CartLine = {
+  id: string;
+  menuItemId: string;
+  menuItemName: string;
+  quantity: number;
+  unitPrice: number;
+  note: string;
+  selectedOptions: Array<{
+    id: string;
+    name: string;
+    priceDelta: number;
+    groupId: string;
+    groupName: string;
+  }>;
+};
 type PrivateDataBundle = {
   orderData: any[];
   favoriteData: any[];
@@ -140,7 +155,11 @@ function AppContent() {
   const [supportStatus, setSupportStatus] = useState<string | null>(null);
   const [checkoutStatus, setCheckoutStatus] = useState<string | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState(false);
-  const [cart, setCart] = useState<Record<string, number>>({});
+  const [cartLines, setCartLines] = useState<CartLine[]>([]);
+  const [customizingItem, setCustomizingItem] = useState<any | null>(null);
+  const [customizationSelections, setCustomizationSelections] = useState<Record<string, string[]>>({});
+  const [customizationNote, setCustomizationNote] = useState("");
+  const [customizationQuantity, setCustomizationQuantity] = useState(1);
   const [locationLabel, setLocationLabel] = useState<string | null>(null);
   const [locationCoords, setLocationCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationStatus, setLocationStatus] = useState<string | null>(null);
@@ -523,6 +542,130 @@ function AppContent() {
     }
   }
 
+  function getItemBasePrice(item: any) {
+    return Number(item?.effectivePrice ?? item?.price ?? 0);
+  }
+
+  function getSelectedOptionsForItem(item: any) {
+    if (!item) return [];
+
+    return (item.modifierGroups ?? []).flatMap((group: any) =>
+      (customizationSelections[group.id] ?? []).map((optionId) => {
+        const option = (group.options ?? []).find((entry: any) => entry.id === optionId);
+        if (!option) return null;
+        return {
+          id: option.id,
+          name: option.name,
+          priceDelta: Number(option.priceDelta ?? 0),
+          groupId: group.id,
+          groupName: group.name
+        };
+      }).filter(Boolean)
+    );
+  }
+
+  function getCustomizationPrice(item: any) {
+    return getSelectedOptionsForItem(item).reduce((sum: number, option: any) => sum + Number(option.priceDelta ?? 0), 0);
+  }
+
+  function openCustomization(item: any) {
+    const defaults = Object.fromEntries(
+      (item.modifierGroups ?? []).map((group: any) => [
+        group.id,
+        (group.options ?? []).filter((option: any) => option.isDefault).map((option: any) => option.id)
+      ])
+    );
+    setCustomizingItem(item);
+    setCustomizationSelections(defaults);
+    setCustomizationNote("");
+    setCustomizationQuantity(1);
+  }
+
+  function closeCustomization() {
+    setCustomizingItem(null);
+    setCustomizationSelections({});
+    setCustomizationNote("");
+    setCustomizationQuantity(1);
+  }
+
+  function toggleCustomizationOption(group: any, optionId: string) {
+    setCustomizationSelections((current) => {
+      const existing = current[group.id] ?? [];
+      const hasOption = existing.includes(optionId);
+
+      if (group.selectionType === "SINGLE") {
+        return {
+          ...current,
+          [group.id]: hasOption ? [] : [optionId]
+        };
+      }
+
+      const next = hasOption ? existing.filter((id) => id !== optionId) : [...existing, optionId];
+      const maxSelect = typeof group.maxSelect === "number" ? group.maxSelect : null;
+      return {
+        ...current,
+        [group.id]: maxSelect && next.length > maxSelect ? next.slice(next.length - maxSelect) : next
+      };
+    });
+  }
+
+  function validateCustomization(item: any) {
+    for (const group of item?.modifierGroups ?? []) {
+      const selected = customizationSelections[group.id] ?? [];
+      const minRequired = group.isRequired ? Math.max(group.minSelect ?? 1, 1) : group.minSelect ?? 0;
+      const maxAllowed = group.selectionType === "SINGLE" ? 1 : group.maxSelect ?? Number.POSITIVE_INFINITY;
+
+      if (selected.length < minRequired) {
+        return `Select ${group.name} before adding this item.`;
+      }
+
+      if (selected.length > maxAllowed) {
+        return `You selected too many options for ${group.name}.`;
+      }
+    }
+
+    return null;
+  }
+
+  function addCustomizedItemToCart() {
+    if (!customizingItem) return;
+    const validationError = validateCustomization(customizingItem);
+
+    if (validationError) {
+      setCheckoutStatus(validationError);
+      return;
+    }
+
+    const selectedOptions = getSelectedOptionsForItem(customizingItem);
+    const unitPrice = getItemBasePrice(customizingItem) + getCustomizationPrice(customizingItem);
+
+    setCartLines((current) => [
+      ...current,
+      {
+        id: `${customizingItem.id}-${Date.now()}`,
+        menuItemId: customizingItem.id,
+        menuItemName: customizingItem.name,
+        quantity: customizationQuantity,
+        unitPrice,
+        note: customizationNote.trim(),
+        selectedOptions
+      }
+    ]);
+    closeCustomization();
+    setCheckoutStatus(null);
+  }
+
+  function updateCartLineQuantity(lineId: string, nextQuantity: number) {
+    if (nextQuantity <= 0) {
+      setCartLines((current) => current.filter((line) => line.id !== lineId));
+      return;
+    }
+
+    setCartLines((current) =>
+      current.map((line) => (line.id === lineId ? { ...line, quantity: nextQuantity } : line))
+    );
+  }
+
   async function handleSignIn() {
     resetAuthFeedback();
     setLoadingAuth(true);
@@ -706,21 +849,19 @@ function AppContent() {
       return;
     }
 
-    const cartItems = menu
-      .filter((item) => (cart[item.id] ?? 0) > 0)
-      .map((item) => ({
-        menuItemId: item.id,
-        quantity: cart[item.id],
-        unitPrice: Number(item.price ?? 0),
-        totalPrice: Number(item.price ?? 0) * (cart[item.id] ?? 0)
-      }));
+    const cartItems = cartLines.map((line) => ({
+      menuItemId: line.menuItemId,
+      quantity: line.quantity,
+      selectedOptionIds: line.selectedOptions.map((option) => option.id),
+      note: line.note || undefined
+    }));
 
     if (!cartItems.length) {
       setCheckoutStatus("Add at least one item to continue.");
       return;
     }
 
-    const orderSubtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
+    const orderSubtotal = cartLines.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0);
     const orderDeliveryFee = Number(selectedRestaurant.deliveryFee ?? 0);
     const orderTotal = orderSubtotal + orderDeliveryFee;
 
@@ -778,7 +919,7 @@ function AppContent() {
       setEta(null);
       setPaymentAuthorizationUrl(null);
       setPaymentReference(order?.payment?.providerRef ?? null);
-      setCart({});
+      setCartLines([]);
 
       if (paymentMethod === "CASH") {
         setCheckoutStatus("Order placed successfully. Pay cash when your order arrives.");
@@ -825,6 +966,8 @@ function AppContent() {
           setActiveTab("home");
           setActiveScreen("browse");
           setAuthMode("signin");
+          setCartLines([]);
+          closeCustomization();
         }
       }
     ]);
@@ -862,8 +1005,8 @@ function AppContent() {
     }
   }
 
-  const cartCount = useMemo(() => Object.values(cart).reduce((sum, count) => sum + count, 0), [cart]);
-  const total = useMemo(() => menu.reduce((sum, item) => sum + (cart[item.id] ?? 0) * Number(item.price ?? 0), 0), [cart, menu]);
+  const cartCount = useMemo(() => cartLines.reduce((sum, line) => sum + line.quantity, 0), [cartLines]);
+  const total = useMemo(() => cartLines.reduce((sum, line) => sum + line.unitPrice * line.quantity, 0), [cartLines]);
   const favoriteIds = favorites.map((item) => item.restaurantId ?? item.restaurant?.id);
   const featuredRestaurants = useMemo(() => restaurants.filter((restaurant) => restaurant.isFeatured).slice(0, 5), [restaurants]);
   const promoRestaurant = featuredRestaurants[0] ?? restaurants[0] ?? null;
@@ -1022,88 +1165,60 @@ function AppContent() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       {activeTab === "home" && activeScreen === "browse" ? (
-        <View style={styles.shell}>
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.shopScroll}>
-            <View style={styles.shopHeader}>
-              <View style={styles.shopHeaderTop}>
-                <View style={styles.shopLocationPill}>
-                  <Ionicons name="location-outline" size={15} color="#111827" />
-                  <Text style={styles.shopLocationText}>{displayedLocation}</Text>
+        <View style={[styles.shell, styles.darkShell]}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.darkBrowseScroll}>
+            <View style={styles.darkBrowseHeader}>
+              <View>
+                <View style={styles.darkLocationRow}>
+                  <Ionicons name="location" size={16} color="#f8de68" />
+                  <View>
+                    <Text style={styles.darkLocationTitle}>Current location</Text>
+                    <Text style={styles.darkLocationMeta}>{displayedLocation}</Text>
+                  </View>
                 </View>
-                <Pressable style={styles.shopCartButton} onPress={() => setActiveScreen("cart")}>
-                  <Ionicons name="bag-handle-outline" size={18} color="#111827" />
-                  {cartCount > 0 ? <View style={styles.shopCartBadge}><Text style={styles.badgeText}>{cartCount}</Text></View> : null}
-                </Pressable>
               </View>
-              <Text style={styles.shopHeroTitle}>Get Your Favorite Dishes Delivered Fresh</Text>
-            </View>
-
-            <View style={styles.shopSearchBar}>
-              <Ionicons name="search-outline" size={18} color="#9ca3af" />
-              <TextInput value={searchQuery} onChangeText={setSearchQuery} style={styles.shopSearchInput} placeholder="Search" placeholderTextColor="#9ca3af" />
-              <Pressable onPress={() => void refreshLocation()}>
-                <Ionicons name={locating ? "sync-outline" : "options-outline"} size={18} color="#6b7280" />
-              </Pressable>
+              <View style={styles.darkSearchWrap}>
+                <Ionicons name="search-outline" size={18} color="#7c7c7c" />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  style={styles.darkSearchInput}
+                  placeholder="Search anything..."
+                  placeholderTextColor="#7c7c7c"
+                />
+              </View>
             </View>
 
             {error ? <Text style={styles.error}>{error}</Text> : null}
 
-            {promoRestaurant ? (
-              <Pressable style={styles.promoCard} onPress={() => void openRestaurant(promoRestaurant)}>
-                <View style={styles.promoTextWrap}>
-                  <Text style={styles.promoTitle}>Order a Set With 40% discount</Text>
-                  <View style={styles.promoButton}>
-                    <Text style={styles.promoButtonText}>Order Now</Text>
-                  </View>
-                </View>
-                <View style={styles.promoArt}>
-                  <View style={styles.foodOrbLarge} />
-                  <View style={styles.foodOrbSmall} />
-                  <Ionicons name="fast-food" size={68} color="#8d2d00" />
-                </View>
-              </Pressable>
-            ) : null}
-
-            <View style={styles.sectionRow}>
-              <Text style={styles.shopSectionTitle}>Category</Text>
-              <Text style={styles.sectionLink}>See All</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
-              {(categoryChips.length ? categoryChips : ["Burger", "Pizza", "Meat", "Drinks"]).map((category, index) => (
-                <Pressable key={category} style={[styles.categoryChipCard, index === 0 && styles.categoryChipCardActive]}>
-                  <View style={[styles.categoryChipIcon, index === 0 && styles.categoryChipIconActive]}>
-                    <Ionicons name={index % 2 === 0 ? "fast-food-outline" : "pizza-outline"} size={20} color={index === 0 ? "#d9480f" : "#6b7280"} />
-                  </View>
-                  <Text style={[styles.categoryChipText, index === 0 && styles.categoryChipTextActive]}>{category}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-
-            <View style={styles.sectionRow}>
-              <Text style={styles.shopSectionTitle}>Popular Food</Text>
-              <Text style={styles.sectionLink}>See All</Text>
-            </View>
-            <View style={styles.popularGrid}>
-              {(popularItems.length ? popularItems : filteredRestaurants.slice(0, 4)).map((item: any, index) => {
-                const title = item.name ?? item.restaurant?.name ?? "BiteHub";
-                const subtitle = item.price ? formatMoney(Number(item.price ?? 0)) : item.category?.name ?? "Fresh pick";
-                const badgeCount = item.price ? cart[item.id] ?? 0 : 0;
+            <View style={styles.restaurantGrid}>
+              {filteredRestaurants.map((restaurant: any) => {
+                const isClosed = restaurant.operatingMode && restaurant.operatingMode !== "LIVE";
+                const hasPromo = restaurant.isFeatured;
+                const mins = restaurant.estimatedDeliveryMins ?? 25;
                 return (
-                  <Pressable
-                    key={item.id ?? `${title}-${index}`}
-                    style={[styles.foodCard, index % 2 === 0 ? styles.foodCardMint : styles.foodCardBlue]}
-                    onPress={() => item.price ? setCart((current) => ({ ...current, [item.id]: (current[item.id] ?? 0) + 1 })) : void openRestaurant(item)}
-                  >
-                    <View style={styles.foodPlate}>
-                      <Ionicons name={index % 2 === 0 ? "fast-food" : "pizza"} size={52} color="#7c2d12" />
+                  <Pressable key={restaurant.id} style={styles.restaurantGridCard} onPress={() => void openRestaurant(restaurant)}>
+                    <View style={styles.restaurantGridImageWrap}>
+                      {restaurant.coverImageUrl ? (
+                        <Image source={{ uri: restaurant.coverImageUrl }} style={styles.restaurantGridImage} resizeMode="cover" />
+                      ) : (
+                        <View style={styles.restaurantGridImageFallback}>
+                          <Ionicons name="restaurant" size={38} color="#f8de68" />
+                        </View>
+                      )}
+                      {isClosed ? (
+                        <View style={styles.closedOverlay}>
+                          <Text style={styles.closedOverlayText}>Closed</Text>
+                        </View>
+                      ) : null}
                     </View>
-                    <Text style={styles.foodCardTitle}>{title}</Text>
-                    <View style={styles.foodCardFooter}>
-                      <Text style={styles.foodCardMeta}>{subtitle}</Text>
-                      <View style={styles.foodCardCart}>
-                        <Ionicons name="bag-handle" size={14} color="#ffffff" />
-                        {badgeCount > 0 ? <Text style={styles.foodCardCartCount}>{badgeCount}</Text> : null}
+                    <View style={styles.restaurantGridMeta}>
+                      <Text numberOfLines={1} style={styles.restaurantGridTitle}>{restaurant.name}</Text>
+                      <View style={styles.restaurantGridInfoRow}>
+                        <Ionicons name="time-outline" size={12} color="#d7c94c" />
+                        <Text style={styles.restaurantGridInfoText}>10-{mins}mins</Text>
                       </View>
+                      {hasPromo ? <View style={styles.offerBadge}><Text style={styles.offerBadgeText}>20%</Text></View> : null}
                     </View>
                   </Pressable>
                 );
@@ -1116,7 +1231,7 @@ function AppContent() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.checkoutBadge}>{cartCount} item{cartCount > 1 ? "s" : ""}</Text>
                   <Text style={styles.checkoutText}>Continue to payment</Text>
-                  <Text style={styles.checkoutSubtext}>Tap here to review your order, address, and payment method.</Text>
+                  <Text style={styles.checkoutSubtext}>Review customizations, address, and payment details.</Text>
                 </View>
                 <Text style={styles.checkoutAmount}>{formatMoney(total + Number(selectedRestaurant?.deliveryFee ?? 0))}</Text>
               </Pressable>
@@ -1125,8 +1240,192 @@ function AppContent() {
           {nav}
         </View>
       ) : null}
-      {activeTab === "home" && activeScreen === "menu" ? <View style={styles.shell}><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.detailScroll}><View style={styles.detailHero}><Pressable style={styles.detailTopButton} onPress={() => setActiveScreen("browse")}><Ionicons name="chevron-back" size={18} color="#111827" /></Pressable><Pressable style={styles.detailTopButton}><Ionicons name={favoriteIds.includes(selectedRestaurant?.id) ? "heart" : "heart-outline"} size={18} color="#111827" /></Pressable><View style={styles.detailHeroPlate}><Ionicons name="fast-food" size={128} color="#8d2d00" /></View></View><View style={styles.detailContent}><Text style={styles.detailTitle}>{selectedRestaurant?.name ?? "Restaurant"}</Text><Text style={styles.detailSubhead}>{selectedHighlights?.restaurant?.storyHeadline ?? "Taste the burger that brings joy to every bite."}</Text><View style={styles.detailPriceRow}><Text style={styles.detailPrice}>{formatMoney(Number(menu[0]?.price ?? selectedRestaurant?.averageMealPrice ?? 0))}</Text><Pressable style={styles.detailFavButton}><Ionicons name="heart-outline" size={18} color="#6b7280" /></Pressable></View><View style={styles.detailMetaRow}><View style={styles.detailMetaPill}><Ionicons name="star" size={14} color="#f59e0b" /><Text style={styles.detailMetaText}>{selectedRestaurant?.ratingAverage?.toFixed?.(1) ?? "4.6"}</Text></View><View style={styles.detailMetaPill}><Ionicons name="time-outline" size={14} color="#111827" /><Text style={styles.detailMetaText}>{selectedRestaurant?.deliveryTimeEstimateMin ?? 20}-{selectedRestaurant?.deliveryTimeEstimateMax ?? 25} min</Text></View><View style={styles.detailMetaPill}><Ionicons name="flame-outline" size={14} color="#111827" /><Text style={styles.detailMetaText}>{menu[0]?.calories ?? 110} Kcal</Text></View></View><View style={styles.detailOwnerRow}><View style={styles.detailOwnerAvatar}><Text style={styles.detailOwnerInitial}>{selectedRestaurant?.name?.slice(0, 1) ?? "B"}</Text></View><View style={{ flex: 1 }}><Text style={styles.detailOwnerName}>{selectedHighlights?.restaurant?.chefNote ? "Chef Note" : "Prepared fresh"}</Text><Text style={styles.detailOwnerSubtext}>{selectedHighlights?.restaurant?.chefNote ?? "Loved by local customers for bold flavors and careful prep."}</Text></View><View style={styles.detailOwnerActions}><Ionicons name="chatbubble-ellipses-outline" size={18} color="#111827" /><Ionicons name="call-outline" size={18} color="#111827" /></View></View><Text style={styles.detailSectionTitle}>Description</Text><Text style={styles.detailDescription}>{selectedHighlights?.restaurant?.storyBody ?? selectedRestaurant?.description ?? "Burger Bang delivers house favorites with juicy patties, fresh toppings, and signature sauces built to satisfy every craving."}</Text>{(selectedHighlights?.dietaryTags ?? []).length ? <View style={styles.tagWrap}>{selectedHighlights.dietaryTags.map((tag: any) => <View key={tag.id} style={styles.tagPill}><Text style={styles.tagText}>{tag.name}</Text></View>)}</View> : null}<Text style={styles.detailSectionTitle}>More from this kitchen</Text>{menu.map((item) => <View key={item.id} style={styles.detailMenuRow}><View style={styles.detailMenuIcon}><Ionicons name={item.isSignature ? "sparkles" : "restaurant-outline"} size={22} color="#8d2d00" /></View><View style={{ flex: 1 }}><Text style={styles.detailMenuTitle}>{item.name}</Text><Text style={styles.cardMeta}>{item.description ?? "Freshly made and ready to order."}</Text><Text style={styles.price}>{formatMoney(Number(item.price ?? 0))}</Text></View><View style={styles.qtyRow}>{(cart[item.id] ?? 0) > 0 ? <Pressable style={styles.qtyAlt} onPress={() => setCart((current) => ({ ...current, [item.id]: Math.max(0, (current[item.id] ?? 0) - 1) }))}><Text style={styles.qtyAltText}>-</Text></Pressable> : null}{(cart[item.id] ?? 0) > 0 ? <Text style={styles.qtyCount}>{cart[item.id]}</Text> : null}<Pressable style={styles.qty} onPress={() => setCart((current) => ({ ...current, [item.id]: (current[item.id] ?? 0) + 1 }))}><Text style={styles.qtyText}>+</Text></Pressable></View></View>)}</View></ScrollView>{cartCount > 0 ? <View style={styles.detailFooter}><View style={styles.detailQuantityBar}><Pressable style={styles.detailQuantityButton} onPress={() => setCart((current) => { const next = { ...current }; const firstItem = menu[0]; if (!firstItem) return current; next[firstItem.id] = Math.max(0, (next[firstItem.id] ?? 0) - 1); return next; })}><Text style={styles.qtyAltText}>-</Text></Pressable><Text style={styles.detailQuantityValue}>{cartCount}</Text><Pressable style={styles.detailQuantityButton} onPress={() => setCart((current) => { const next = { ...current }; const firstItem = menu[0]; if (!firstItem) return current; next[firstItem.id] = (next[firstItem.id] ?? 0) + 1; return next; })}><Text style={styles.qtyAltText}>+</Text></Pressable></View><View style={styles.detailCheckoutWrap}><Text style={styles.detailCheckoutHint}>Ready to pay?</Text><Pressable style={styles.detailAddButton} onPress={() => setActiveScreen("cart")}><Text style={styles.detailAddButtonText}>Continue to Checkout</Text></Pressable></View></View> : null}</View> : null}
-      {activeTab === "home" && activeScreen === "cart" ? <View style={styles.shell}><View style={styles.headerRow}><Pressable style={styles.iconButton} onPress={() => setActiveScreen("menu")}><Text style={styles.iconButtonText}>Back</Text></Pressable><Text style={styles.headerTitle}>Checkout</Text></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>{menu.filter((item) => (cart[item.id] ?? 0) > 0).map((item) => <View key={item.id} style={styles.card}><View style={styles.thumb}><Text style={styles.thumbText}>{item.name?.slice(0, 1) ?? "M"}</Text></View><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{item.name}</Text><Text style={styles.cardMeta}>Qty {(cart[item.id] ?? 0)}</Text><Text style={styles.price}>{formatMoney(Number(item.price ?? 0) * (cart[item.id] ?? 0))}</Text></View></View>)}<View style={styles.summary}><Text style={styles.cardTitle}>Delivery Address</Text>{addresses.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.restaurantChoiceRow}>{addresses.map((address) => <Pressable key={address.id} style={[styles.restaurantChoice, selectedAddressId === address.id && styles.restaurantChoiceActive]} onPress={() => { setSelectedAddressId(address.id); setAddressInput(address.fullAddress ?? ""); setAddressInstructions(address.instructions ?? ""); }}><Text style={[styles.restaurantChoiceText, selectedAddressId === address.id && styles.restaurantChoiceTextActive]}>{address.label}</Text></Pressable>)}</ScrollView> : <Text style={styles.cardMeta}>No saved addresses yet. Add one below.</Text>}<TextInput value={addressLabelInput} onChangeText={setAddressLabelInput} placeholder="Address label" placeholderTextColor="#9ca3af" style={styles.input} /><TextInput value={addressInput} onChangeText={(value) => { setSelectedAddressId(""); setAddressInput(value); }} placeholder="Full delivery address" placeholderTextColor="#9ca3af" style={styles.input} multiline /><TextInput value={addressInstructions} onChangeText={setAddressInstructions} placeholder="Delivery instructions" placeholderTextColor="#9ca3af" style={styles.input} multiline /></View><View style={styles.summary}><Text style={styles.cardTitle}>Payment Method</Text><View style={styles.actionRow}>{(["CASH", "CARD", "MOBILE_MONEY"] as PaymentMethod[]).map((method) => <Pressable key={method} style={[styles.toggleChip, paymentMethod === method && styles.toggleChipActive]} onPress={() => setPaymentMethod(method)}><Text style={[styles.toggleChipText, paymentMethod === method && styles.toggleChipTextActive]}>{method.replaceAll("_", " ")}</Text></Pressable>)}</View><Text style={styles.checkoutHelperText}>{paymentMethod === "CASH" ? "Cash orders are confirmed now and paid on delivery." : paymentMethod === "CARD" ? "Card orders will open a secure payment page after you confirm." : "Mobile money orders will open a secure payment page after you confirm."}</Text></View><View style={styles.summary}><Text style={styles.cardTitle}>Order Summary</Text><Text style={styles.cardMeta}>Items total: {formatMoney(total)}</Text><Text style={styles.cardMeta}>Delivery fee: {formatMoney(Number(selectedRestaurant?.deliveryFee ?? 0))}</Text><Text style={styles.price}>Total: {formatMoney(total + Number(selectedRestaurant?.deliveryFee ?? 0))}</Text>{checkoutStatus ? <Text style={styles.cardMeta}>{checkoutStatus}</Text> : null}<Pressable style={styles.primaryButton} onPress={() => void placeOrder()} disabled={checkoutLoading}><Text style={styles.primaryButtonText}>{checkoutLoading ? "Processing..." : paymentMethod === "CASH" ? "Place Cash Order" : paymentMethod === "CARD" ? "Continue to Card Payment" : "Continue to Mobile Money"}</Text></Pressable></View></ScrollView></View> : null}
+      {activeTab === "home" && activeScreen === "menu" ? (
+        <View style={[styles.shell, styles.darkShell]}>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.restaurantMenuScroll}>
+            <View style={styles.restaurantHero}>
+              {selectedRestaurant?.coverImageUrl ? (
+                <Image source={{ uri: selectedRestaurant.coverImageUrl }} style={styles.restaurantHeroImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.restaurantHeroFallback}>
+                  <Ionicons name="restaurant" size={88} color="#f8de68" />
+                </View>
+              )}
+              <Pressable style={styles.restaurantHeroButton} onPress={() => setActiveScreen("browse")}>
+                <Ionicons name="chevron-back" size={18} color="#f8de68" />
+              </Pressable>
+              <View style={styles.ratingPill}>
+                <Ionicons name="star" size={14} color="#f8de68" />
+                <Text style={styles.ratingPillText}>{Number(selectedRestaurant?.averageRating ?? 3.8).toFixed(1)}</Text>
+              </View>
+            </View>
+
+            <View style={styles.restaurantTitleBand}>
+              <Text style={styles.restaurantTitleBandText}>{selectedRestaurant?.name ?? "Restaurant"}</Text>
+            </View>
+
+            <View style={styles.menuTabRow}>
+              <Text style={styles.menuTabTextActive}>MAIN MENU</Text>
+            </View>
+
+            <View style={styles.restaurantMenuSection}>
+              <Text style={styles.restaurantMenuSectionTitle}>MAIN MENU</Text>
+              {menu.map((item) => (
+                <Pressable key={item.id} style={styles.restaurantMenuItem} onPress={() => openCustomization(item)}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.restaurantMenuItemTitle}>{item.name}</Text>
+                    <Text style={styles.restaurantMenuItemPrice}>
+                      From {formatMoney(Number(item.effectivePrice ?? item.price ?? 0))}
+                      {item.originalPrice ? `  •  was ${formatMoney(Number(item.originalPrice ?? 0))}` : ""}
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#d7c94c" />
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+          {cartCount > 0 ? (
+            <View style={styles.detailFooter}>
+              <View style={styles.detailCheckoutWrap}>
+                <Text style={styles.detailCheckoutHint}>Basket ready</Text>
+                <Pressable style={styles.detailAddButton} onPress={() => setActiveScreen("cart")}>
+                  <Text style={styles.detailAddButtonText}>Go to Basket</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {activeTab === "home" && activeScreen === "cart" ? (
+        <View style={styles.shell}>
+          <View style={styles.headerRow}>
+            <Pressable style={styles.iconButton} onPress={() => setActiveScreen("menu")}>
+              <Text style={styles.iconButtonText}>Back</Text>
+            </Pressable>
+            <Text style={styles.headerTitle}>Checkout</Text>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+            {cartLines.map((line) => (
+              <View key={line.id} style={styles.card}>
+                <View style={styles.thumb}><Text style={styles.thumbText}>{line.menuItemName?.slice(0, 1) ?? "M"}</Text></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{line.menuItemName}</Text>
+                  {line.selectedOptions.length ? (
+                    <Text style={styles.cardMeta}>
+                      {line.selectedOptions.map((option) => option.name).join(", ")}
+                    </Text>
+                  ) : null}
+                  {line.note ? <Text style={styles.cardMeta}>Note: {line.note}</Text> : null}
+                  <Text style={styles.price}>{formatMoney(line.unitPrice * line.quantity)}</Text>
+                </View>
+                <View style={styles.qtyRow}>
+                  <Pressable style={styles.qtyAlt} onPress={() => updateCartLineQuantity(line.id, line.quantity - 1)}>
+                    <Text style={styles.qtyAltText}>-</Text>
+                  </Pressable>
+                  <Text style={styles.qtyCount}>{line.quantity}</Text>
+                  <Pressable style={styles.qty} onPress={() => updateCartLineQuantity(line.id, line.quantity + 1)}>
+                    <Text style={styles.qtyText}>+</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+            <View style={styles.summary}>
+              <Text style={styles.cardTitle}>Delivery Address</Text>
+              {addresses.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.restaurantChoiceRow}>{addresses.map((address) => <Pressable key={address.id} style={[styles.restaurantChoice, selectedAddressId === address.id && styles.restaurantChoiceActive]} onPress={() => { setSelectedAddressId(address.id); setAddressInput(address.fullAddress ?? ""); setAddressInstructions(address.instructions ?? ""); }}><Text style={[styles.restaurantChoiceText, selectedAddressId === address.id && styles.restaurantChoiceTextActive]}>{address.label}</Text></Pressable>)}</ScrollView> : <Text style={styles.cardMeta}>No saved addresses yet. Add one below.</Text>}
+              <TextInput value={addressLabelInput} onChangeText={setAddressLabelInput} placeholder="Address label" placeholderTextColor="#9ca3af" style={styles.input} />
+              <TextInput value={addressInput} onChangeText={(value) => { setSelectedAddressId(""); setAddressInput(value); }} placeholder="Full delivery address" placeholderTextColor="#9ca3af" style={styles.input} multiline />
+              <TextInput value={addressInstructions} onChangeText={setAddressInstructions} placeholder="Delivery instructions" placeholderTextColor="#9ca3af" style={styles.input} multiline />
+            </View>
+            <View style={styles.summary}>
+              <Text style={styles.cardTitle}>Payment Method</Text>
+              <View style={styles.actionRow}>{(["CASH", "CARD", "MOBILE_MONEY"] as PaymentMethod[]).map((method) => <Pressable key={method} style={[styles.toggleChip, paymentMethod === method && styles.toggleChipActive]} onPress={() => setPaymentMethod(method)}><Text style={[styles.toggleChipText, paymentMethod === method && styles.toggleChipTextActive]}>{method.replaceAll("_", " ")}</Text></Pressable>)}</View>
+              <Text style={styles.checkoutHelperText}>{paymentMethod === "CASH" ? "Cash orders are confirmed now and paid on delivery." : paymentMethod === "CARD" ? "Card orders will open a secure payment page after you confirm." : "Mobile money orders will open a secure payment page after you confirm."}</Text>
+            </View>
+            <View style={styles.summary}>
+              <Text style={styles.cardTitle}>Order Summary</Text>
+              <Text style={styles.cardMeta}>Items total: {formatMoney(total)}</Text>
+              <Text style={styles.cardMeta}>Delivery fee: {formatMoney(Number(selectedRestaurant?.deliveryFee ?? 0))}</Text>
+              <Text style={styles.price}>Total: {formatMoney(total + Number(selectedRestaurant?.deliveryFee ?? 0))}</Text>
+              {checkoutStatus ? <Text style={styles.cardMeta}>{checkoutStatus}</Text> : null}
+              <Pressable style={styles.primaryButton} onPress={() => void placeOrder()} disabled={checkoutLoading}>
+                <Text style={styles.primaryButtonText}>{checkoutLoading ? "Processing..." : paymentMethod === "CASH" ? "Place Cash Order" : paymentMethod === "CARD" ? "Continue to Card Payment" : "Continue to Mobile Money"}</Text>
+              </Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      ) : null}
+      {customizingItem ? (
+        <View style={styles.customizationBackdrop}>
+          <View style={styles.customizationSheet}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.customizationSheetContent}>
+              <View style={styles.customizationHeader}>
+                <Text style={styles.customizationTitle}>{customizingItem.name}</Text>
+                <Text style={styles.customizationSubtitle}>
+                  From {formatMoney(Number(customizingItem.effectivePrice ?? customizingItem.price ?? 0))}
+                </Text>
+              </View>
+
+              {(customizingItem.modifierGroups ?? []).map((group: any) => {
+                const selectedIds = customizationSelections[group.id] ?? [];
+                return (
+                  <View key={group.id} style={styles.customizationGroup}>
+                    <View style={styles.customizationGroupHeader}>
+                      <Text style={styles.customizationGroupTitle}>{group.name}</Text>
+                      {group.isRequired ? <Text style={styles.requiredBadge}>Required</Text> : null}
+                    </View>
+                    {group.description ? <Text style={styles.customizationGroupCopy}>{group.description}</Text> : null}
+                    {(group.options ?? []).map((option: any) => {
+                      const selected = selectedIds.includes(option.id);
+                      return (
+                        <Pressable key={option.id} style={styles.customizationOptionRow} onPress={() => toggleCustomizationOption(group, option.id)}>
+                          <View style={[styles.optionSelector, selected && styles.optionSelectorActive]}>
+                            {group.selectionType === "SINGLE" ? (
+                              <View style={[styles.optionSelectorInner, selected && styles.optionSelectorInnerActive]} />
+                            ) : selected ? (
+                              <Ionicons name="checkmark" size={14} color="#111111" />
+                            ) : null}
+                          </View>
+                          <Text style={styles.customizationOptionText}>{option.name}</Text>
+                          <Text style={styles.customizationOptionPrice}>
+                            {Number(option.priceDelta ?? 0) > 0 ? `+${formatMoney(Number(option.priceDelta ?? 0))}` : ""}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                );
+              })}
+
+              <TextInput
+                value={customizationNote}
+                onChangeText={setCustomizationNote}
+                placeholder="Tap here to add a note to the vendor..."
+                placeholderTextColor="#8a8a8a"
+                style={styles.customizationNoteInput}
+                multiline
+              />
+            </ScrollView>
+
+            <View style={styles.customizationFooter}>
+              <View style={styles.customizationQuantityRow}>
+                <Pressable style={styles.customizationQuantityButton} onPress={() => setCustomizationQuantity((current) => Math.max(1, current - 1))}>
+                  <Text style={styles.customizationQuantitySymbol}>-</Text>
+                </Pressable>
+                <Text style={styles.customizationQuantityValue}>{customizationQuantity}</Text>
+                <Pressable style={styles.customizationQuantityButton} onPress={() => setCustomizationQuantity((current) => current + 1)}>
+                  <Text style={styles.customizationQuantitySymbol}>+</Text>
+                </Pressable>
+              </View>
+              <Pressable style={styles.customizationAddButton} onPress={addCustomizedItemToCart}>
+                <Text style={styles.customizationAddButtonText}>Add</Text>
+              </Pressable>
+            </View>
+            <Pressable style={styles.customizationClose} onPress={closeCustomization}>
+              <Ionicons name="close" size={18} color="#f8de68" />
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
       {activeTab === "home" && activeScreen === "confirmation" ? (
         <View style={styles.shell}>
           <View style={styles.headerRow}>
@@ -1328,5 +1627,69 @@ const styles = StyleSheet.create({
   toggleChip: { borderRadius: 16, backgroundColor: "#f3f4f6", paddingHorizontal: 14, paddingVertical: 10 },
   toggleChipActive: { backgroundColor: "#fff7ed" },
   toggleChipText: { color: "#6b7280", fontSize: 12, fontWeight: "700" },
-  toggleChipTextActive: { color: "#c2410c" }
+  toggleChipTextActive: { color: "#c2410c" },
+  darkShell: { backgroundColor: "#171717" },
+  darkBrowseScroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20 },
+  darkBrowseHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
+  darkLocationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  darkLocationTitle: { color: "#f3f4f6", fontSize: 15, fontWeight: "800" },
+  darkLocationMeta: { color: "#8a8a8a", fontSize: 12, marginTop: 2 },
+  darkSearchWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 16, backgroundColor: "#222222", paddingHorizontal: 12, paddingVertical: 10, maxWidth: 180 },
+  darkSearchInput: { flex: 1, color: "#f3f4f6", fontSize: 13 },
+  restaurantGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 16 },
+  restaurantGridCard: { width: "47%" },
+  restaurantGridImageWrap: { height: 138, borderRadius: 16, overflow: "hidden", borderWidth: 1.5, borderColor: "#d7c94c", backgroundColor: "#222222" },
+  restaurantGridImage: { width: "100%", height: "100%" },
+  restaurantGridImageFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#2a2a2a" },
+  closedOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.48)" },
+  closedOverlayText: { color: "#ffffff", fontSize: 22, fontWeight: "700" },
+  restaurantGridMeta: { marginTop: 8, position: "relative" },
+  restaurantGridTitle: { color: "#f3f4f6", fontSize: 14, fontWeight: "700", paddingRight: 40 },
+  restaurantGridInfoRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
+  restaurantGridInfoText: { color: "#d7c94c", fontSize: 12 },
+  offerBadge: { position: "absolute", top: -2, right: 0, borderRadius: 8, backgroundColor: "#f8de68", paddingHorizontal: 8, paddingVertical: 3 },
+  offerBadgeText: { color: "#111111", fontSize: 11, fontWeight: "800" },
+  restaurantMenuScroll: { paddingBottom: 120, backgroundColor: "#171717" },
+  restaurantHero: { height: 230, position: "relative", backgroundColor: "#242424" },
+  restaurantHeroImage: { width: "100%", height: "100%" },
+  restaurantHeroFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#303030" },
+  restaurantHeroButton: { position: "absolute", top: 18, left: 16, width: 38, height: 38, borderRadius: 14, backgroundColor: "rgba(20,20,20,0.7)", alignItems: "center", justifyContent: "center" },
+  ratingPill: { position: "absolute", top: 18, right: 16, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 16, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 12, paddingVertical: 9 },
+  ratingPillText: { color: "#f3f4f6", fontSize: 13, fontWeight: "800" },
+  restaurantTitleBand: { backgroundColor: "#2a2a2a", paddingHorizontal: 18, paddingVertical: 12 },
+  restaurantTitleBandText: { color: "#f8de68", fontSize: 24, fontWeight: "700" },
+  menuTabRow: { paddingHorizontal: 18, paddingTop: 12, borderBottomWidth: 1, borderBottomColor: "#2e2e2e" },
+  menuTabTextActive: { color: "#f3f4f6", fontSize: 16, fontWeight: "700", borderBottomWidth: 2, borderBottomColor: "#d7c94c", paddingBottom: 10, alignSelf: "flex-start" },
+  restaurantMenuSection: { paddingHorizontal: 18, paddingTop: 26 },
+  restaurantMenuSectionTitle: { color: "#f3f4f6", fontSize: 16, fontWeight: "700", marginBottom: 16 },
+  restaurantMenuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: "#2e2e2e" },
+  restaurantMenuItemTitle: { color: "#f3f4f6", fontSize: 18, fontWeight: "600" },
+  restaurantMenuItemPrice: { color: "#d7c94c", fontSize: 16, marginTop: 6 },
+  customizationBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
+  customizationSheet: { backgroundColor: "#1f1f1f", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "84%", paddingTop: 18 },
+  customizationSheetContent: { paddingHorizontal: 18, paddingBottom: 14 },
+  customizationHeader: { paddingRight: 32, marginBottom: 18 },
+  customizationTitle: { color: "#f3f4f6", fontSize: 24, fontWeight: "700" },
+  customizationSubtitle: { color: "#d7c94c", fontSize: 16, marginTop: 6 },
+  customizationGroup: { marginBottom: 24 },
+  customizationGroupHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  customizationGroupTitle: { color: "#f8de68", fontSize: 22, fontWeight: "700" },
+  requiredBadge: { borderRadius: 999, backgroundColor: "#f8de68", color: "#111111", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "800" },
+  customizationGroupCopy: { color: "#a3a3a3", fontSize: 14, marginBottom: 10 },
+  customizationOptionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
+  optionSelector: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "#f3f4f6", alignItems: "center", justifyContent: "center" },
+  optionSelectorActive: { borderColor: "#f8de68", backgroundColor: "#f8de68" },
+  optionSelectorInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: "transparent" },
+  optionSelectorInnerActive: { backgroundColor: "#111111" },
+  customizationOptionText: { flex: 1, color: "#f3f4f6", fontSize: 16 },
+  customizationOptionPrice: { color: "#d7c94c", fontSize: 16 },
+  customizationNoteInput: { borderRadius: 18, backgroundColor: "#111111", color: "#f3f4f6", minHeight: 54, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 10 },
+  customizationFooter: { flexDirection: "row", alignItems: "center", gap: 14, borderTopWidth: 1, borderTopColor: "#2e2e2e", paddingHorizontal: 18, paddingTop: 14, paddingBottom: 24 },
+  customizationQuantityRow: { flexDirection: "row", alignItems: "center", gap: 16, flex: 1 },
+  customizationQuantityButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
+  customizationQuantitySymbol: { color: "#d7c94c", fontSize: 26, fontWeight: "400" },
+  customizationQuantityValue: { color: "#f8de68", fontSize: 30, fontWeight: "300" },
+  customizationAddButton: { minWidth: 112, borderRadius: 22, backgroundColor: "#bfbfbf", paddingHorizontal: 24, paddingVertical: 14, alignItems: "center" },
+  customizationAddButtonText: { color: "#2b2b2b", fontSize: 20, fontWeight: "700" },
+  customizationClose: { position: "absolute", top: 14, right: 16, width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }
 });

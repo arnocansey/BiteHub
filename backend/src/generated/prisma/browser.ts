@@ -58,6 +58,16 @@ export type Restaurant = Prisma.RestaurantModel
  */
 export type MenuItem = Prisma.MenuItemModel
 /**
+ * Model MenuItemModifierGroup
+ * 
+ */
+export type MenuItemModifierGroup = Prisma.MenuItemModifierGroupModel
+/**
+ * Model MenuItemModifierOption
+ * 
+ */
+export type MenuItemModifierOption = Prisma.MenuItemModifierOptionModel
+/**
  * Model DietaryTag
  * 
  */
@@ -157,6 +167,11 @@ export type Payment = Prisma.PaymentModel
  * 
  */
 export type OrderSettlement = Prisma.OrderSettlementModel
+/**
+ * Model PayoutRequest
+ * 
+ */
+export type PayoutRequest = Prisma.PayoutRequestModel
 /**
  * Model Delivery
  * 

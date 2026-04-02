@@ -22,6 +22,7 @@ type RiderDataBundle = {
   earningsData: any;
   opsData: any;
   notificationData: any[];
+  payoutData: any;
 };
 const sessionStorageKey = "bitehub_rider_session";
 const riderProfileImageStorageKey = "bitehub_rider_profile_image";
@@ -320,6 +321,7 @@ function AppContent() {
   const [profile, setProfile] = useState<any>(null);
   const [jobs, setJobs] = useState<any[]>([]);
   const [earnings, setEarnings] = useState<any>(null);
+  const [payoutSnapshot, setPayoutSnapshot] = useState<any>(null);
   const [opsInsights, setOpsInsights] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [busyDeliveryId, setBusyDeliveryId] = useState<string | null>(null);
@@ -330,6 +332,7 @@ function AppContent() {
   const [refreshingHome, setRefreshingHome] = useState(false);
   const [profileImageOverride, setProfileImageOverride] = useState<string | null>(null);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
+  const [requestingPayout, setRequestingPayout] = useState(false);
   const logoutOpacity = useRef(new Animated.Value(0)).current;
   const logoutTranslateY = useRef(new Animated.Value(32)).current;
   const tutorialPagerRef = useRef<ScrollView | null>(null);
@@ -397,21 +400,23 @@ function AppContent() {
   }
 
   async function fetchRiderDataBundle(activeSession: Session): Promise<RiderDataBundle> {
-    const [profileData, jobsData, earningsData, opsData, notificationData] = await Promise.all([
+    const [profileData, jobsData, earningsData, opsData, notificationData, payoutData] = await Promise.all([
       request<any>("/riders/profile", {}, activeSession),
       request<any[]>("/riders/jobs", {}, activeSession),
       request<any>("/riders/earnings", {}, activeSession),
       request<any>("/riders/incentives", {}, activeSession),
-      request<any[]>("/notifications", {}, activeSession)
+      request<any[]>("/notifications", {}, activeSession),
+      request<any>("/riders/payout-requests", {}, activeSession)
     ]);
 
-    return { profileData, jobsData, earningsData, opsData, notificationData };
+    return { profileData, jobsData, earningsData, opsData, notificationData, payoutData };
   }
 
   function applyRiderBundle(bundle: RiderDataBundle) {
     setProfile(bundle.profileData);
     setJobs(bundle.jobsData);
     setEarnings(bundle.earningsData);
+    setPayoutSnapshot(bundle.payoutData);
     setOpsInsights(bundle.opsData);
     setNotifications(bundle.notificationData);
   }
@@ -746,10 +751,29 @@ function AppContent() {
     setActiveTab("home");
     setProfileScreen("menu");
     setAuthMode("signin");
+    setPayoutSnapshot(null);
   }
 
   function signOut() {
     openLogoutModal();
+  }
+
+  async function requestRiderPayout() {
+    if (!session) return;
+    setRequestingPayout(true);
+    setError(null);
+    try {
+      await request("/riders/payout-requests", {
+        method: "POST",
+        body: JSON.stringify({})
+      }, session);
+      await loadRiderData(session);
+      setAuthMessage("Payout request sent to admin for approval.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to request rider payout.");
+    } finally {
+      setRequestingPayout(false);
+    }
   }
 
   async function addProfilePicture() {
@@ -1052,6 +1076,30 @@ function AppContent() {
         {activeTab === "earnings" ? <>
           <View style={styles.heroCard}><Text style={styles.heroLabel}>Estimated Earnings</Text><Text style={styles.heroValue}>{formatMoney(Number(earnings?.estimatedEarnings ?? 0))}</Text><Text style={styles.heroSub}>{earnings?.completedDeliveries ?? 0} completed deliveries</Text></View>
           <View style={styles.panel}><Text style={styles.cardTitle}>Delivery Summary</Text><Text style={styles.cardMeta}>Completed: {earnings?.completedDeliveries ?? 0}</Text><Text style={styles.cardMeta}>Open jobs: {activeJobs.length}</Text></View>
+          <View style={styles.panel}>
+            <Text style={styles.cardTitle}>Payout Approval</Text>
+            <Text style={styles.cardMeta}>Available to request: {formatMoney(Number(payoutSnapshot?.availableAmount ?? 0))}</Text>
+            <Text style={styles.cardMeta}>Pending: {formatMoney(Number(payoutSnapshot?.pendingAmount ?? 0))} • Approved: {formatMoney(Number(payoutSnapshot?.approvedAmount ?? 0))}</Text>
+            <Pressable
+              style={[styles.primaryAction, { marginTop: 14, opacity: payoutSnapshot?.canRequest ? 1 : 0.55 }]}
+              onPress={() => void requestRiderPayout()}
+              disabled={!payoutSnapshot?.canRequest || requestingPayout}
+            >
+              <Text style={styles.primaryActionText}>{requestingPayout ? "Requesting..." : "Request payout approval"}</Text>
+            </Pressable>
+            {Array.isArray(payoutSnapshot?.requests) && payoutSnapshot.requests.length ? (
+              <View style={{ marginTop: 14, gap: 10 }}>
+                {payoutSnapshot.requests.slice(0, 3).map((item: any) => (
+                  <View key={item.id} style={styles.subRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.routeTitle}>{formatMoney(Number(item.approvedAmount ?? item.requestedAmount ?? 0))}</Text>
+                      <Text style={styles.cardMeta}>{String(item.status).replaceAll("_", " ")} • {new Date(item.createdAt).toLocaleDateString()}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
           <View style={styles.panel}><Text style={styles.cardTitle}>Live incentives</Text>{(opsInsights?.incentives ?? []).length ? (opsInsights?.incentives ?? []).map((incentive: any) => <View key={incentive.id} style={styles.subRow}><View style={{ flex: 1 }}><Text style={styles.routeTitle}>{incentive.title}</Text><Text style={styles.cardMeta}>{incentive.description}</Text></View><Text style={styles.statusText}>{formatMoney(Number(incentive.bonusAmount ?? 0))}</Text></View>) : <Text style={styles.cardMeta}>No active incentives right now.</Text>}</View>
           <View style={styles.panel}><Text style={styles.cardTitle}>Hot zones</Text>{(opsInsights?.heatmap ?? []).slice(0, 4).map((zone: any) => <View key={zone.id} style={styles.subRow}><View style={{ flex: 1 }}><Text style={styles.routeTitle}>{zone.zoneLabel}</Text><Text style={styles.cardMeta}>Demand {zone.demandLevel}/10 | Supply {zone.supplyLevel}/10 | ETA {zone.averageEtaMinutes} min</Text></View><Text style={styles.statusText}>{zone.activeOrders} jobs</Text></View>)}</View>
         </> : null}

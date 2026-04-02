@@ -134,6 +134,23 @@ enum DispatchMode {
   MANUAL
 }
 
+enum ModifierSelectionType {
+  SINGLE
+  MULTIPLE
+}
+
+enum PayoutRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum PayoutRequestTarget {
+  VENDOR
+  RIDER
+}
+
 model User {
   id              String           @id @default(cuid())
   email           String           @unique
@@ -157,6 +174,8 @@ model User {
   orders          Order[]          @relation("CustomerOrders")
   addresses       Address[]
   passwordResetTokens PasswordResetToken[]
+  payoutRequests  PayoutRequest[] @relation("PayoutRequester")
+  payoutReviews   PayoutRequest[] @relation("PayoutReviewer")
 }
 
 model CustomerProfile {
@@ -191,6 +210,7 @@ model VendorProfile {
   user           User           @relation(fields: [userId], references: [id])
   restaurants    Restaurant[]
   qualityScores  QualityScore[]
+  payoutRequests PayoutRequest[]
 }
 
 model RiderProfile {
@@ -205,6 +225,7 @@ model RiderProfile {
   deliveries       Delivery[]
   incentives       RiderIncentive[]
   qualityScores    QualityScore[]
+  payoutRequests   PayoutRequest[]
 }
 
 model AdminProfile {
@@ -277,6 +298,10 @@ model MenuItem {
   name            String
   description     String?
   price           Decimal        @db.Decimal(10, 2)
+  specialPrice    Decimal?       @db.Decimal(10, 2)
+  specialPriceLabel String?
+  specialStartsAt DateTime?
+  specialEndsAt   DateTime?
   imageUrl        String?
   status          MenuItemStatus @default(AVAILABLE)
   preparationMins Int            @default(20)
@@ -292,6 +317,36 @@ model MenuItem {
   orderItems      OrderItem[]
   cartItems       CartItem[]
   dietaryTags     MenuItemDietaryTag[]
+  modifierGroups  MenuItemModifierGroup[]
+}
+
+model MenuItemModifierGroup {
+  id            String                @id @default(cuid())
+  menuItemId    String
+  name          String
+  description   String?
+  selectionType ModifierSelectionType @default(MULTIPLE)
+  minSelect     Int                   @default(0)
+  maxSelect     Int?
+  isRequired    Boolean               @default(false)
+  sortOrder     Int                   @default(0)
+  menuItem      MenuItem              @relation(fields: [menuItemId], references: [id], onDelete: Cascade)
+  options       MenuItemModifierOption[]
+
+  @@index([menuItemId, sortOrder])
+}
+
+model MenuItemModifierOption {
+  id               String                @id @default(cuid())
+  modifierGroupId  String
+  name             String
+  priceDelta       Decimal               @default(0) @db.Decimal(10, 2)
+  isDefault        Boolean               @default(false)
+  isAvailable      Boolean               @default(true)
+  sortOrder        Int                   @default(0)
+  modifierGroup    MenuItemModifierGroup @relation(fields: [modifierGroupId], references: [id], onDelete: Cascade)
+
+  @@index([modifierGroupId, sortOrder])
 }
 
 model DietaryTag {
@@ -554,6 +609,9 @@ model OrderItem {
   quantity   Int
   unitPrice  Decimal  @db.Decimal(10, 2)
   totalPrice Decimal  @db.Decimal(10, 2)
+  itemNameSnapshot String?
+  customerNote String?
+  customizationSummary Json?
   order      Order    @relation(fields: [orderId], references: [id])
   menuItem   MenuItem @relation(fields: [menuItemId], references: [id])
 }
@@ -592,6 +650,32 @@ model OrderSettlement {
   createdAt                  DateTime @default(now())
   updatedAt                  DateTime @updatedAt
   order                      Order    @relation(fields: [orderId], references: [id])
+}
+
+model PayoutRequest {
+  id              String              @id @default(cuid())
+  targetType      PayoutRequestTarget
+  status          PayoutRequestStatus @default(PENDING)
+  requesterUserId String
+  vendorProfileId String?
+  riderProfileId  String?
+  requestedAmount Decimal             @db.Decimal(10, 2)
+  approvedAmount  Decimal?            @db.Decimal(10, 2)
+  note            String?
+  adminNote       String?
+  reviewedById    String?
+  reviewedAt      DateTime?
+  paidAt          DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  requester       User                @relation("PayoutRequester", fields: [requesterUserId], references: [id])
+  reviewedBy      User?               @relation("PayoutReviewer", fields: [reviewedById], references: [id])
+  vendorProfile   VendorProfile?      @relation(fields: [vendorProfileId], references: [id])
+  riderProfile    RiderProfile?       @relation(fields: [riderProfileId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([vendorProfileId, createdAt])
+  @@index([riderProfileId, createdAt])
 }
 
 model Delivery {

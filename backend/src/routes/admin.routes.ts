@@ -10,6 +10,7 @@ import {
   adminPromoteUserSchema,
   assignRiderSchema,
   categorySchema,
+  payoutRequestReviewSchema,
   settlementActionSchema,
   restaurantCollectionSchema,
   restaurantStatusSchema,
@@ -45,6 +46,17 @@ router.get("/reports/revenue", asyncHandler(adminController.revenueReport));
 router.get("/reports/retention", asyncHandler(adminController.retentionReport));
 router.get("/reports/operations", asyncHandler(adminController.operationsIntelligence));
 router.get("/finance/settlements", asyncHandler(adminController.settlementPreview));
+router.get("/finance/payout-requests", asyncHandler(adminController.payoutRequests));
+router.patch(
+  "/finance/payout-requests/:requestId/approve",
+  validate(payoutRequestReviewSchema),
+  asyncHandler(adminController.approvePayoutRequest)
+);
+router.patch(
+  "/finance/payout-requests/:requestId/reject",
+  validate(payoutRequestReviewSchema),
+  asyncHandler(adminController.rejectPayoutRequest)
+);
 router.post("/finance/settlements", validate(settlementActionSchema), asyncHandler(adminController.createSettlementBatch));
 router.get("/support-tickets", asyncHandler(adminController.supportTickets));
 router.get("/trust/overview", asyncHandler(adminController.trustOverview));

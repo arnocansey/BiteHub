@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import { ApprovalStatus, DeliveryStatus, PaymentMethod, RestaurantStatus, UserRole } from "../generated/prisma/client";
-import { DispatchMode, GroupOrderStatus, ScheduledOrderStatus, SubscriptionStatus } from "../generated/prisma/enums";
+import { DispatchMode, GroupOrderStatus, PayoutRequestStatus, PayoutRequestTarget, ScheduledOrderStatus, SubscriptionStatus } from "../generated/prisma/enums";
 import { prisma } from "../config/prisma";
 import { emitOrderUpdate } from "../realtime/socket";
 import { createDeliveryEvent, upsertEtaPrediction } from "../services/order-trust.service";
@@ -33,6 +33,9 @@ const adminProfilePublicSelect = {
 
 const platformSettingsDelegate = prisma as typeof prisma & {
   platformSettings: any;
+};
+const payoutRequestDelegate = prisma as typeof prisma & {
+  payoutRequest: any;
 };
 
 async function getPlatformSettingsRecord() {
@@ -90,7 +93,7 @@ async function getPlatformSettingsRecord() {
 }
 
 async function buildSettlementPreview() {
-  const [settings, deliveredOrders, batches] = (await Promise.all([
+  const [settings, deliveredOrders, batches, payoutRequests] = (await Promise.all([
     getPlatformSettingsRecord(),
     prisma.order.findMany({
       where: {
@@ -127,12 +130,49 @@ async function buildSettlementPreview() {
       where: { entityType: "SETTLEMENT_BATCH" },
       orderBy: { createdAt: "desc" },
       take: 10
+    }),
+    payoutRequestDelegate.payoutRequest.findMany({
+      include: {
+        requester: true,
+        vendorProfile: {
+          include: {
+            user: true
+          }
+        },
+        riderProfile: {
+          include: {
+            user: true
+          }
+        }
+      },
+      orderBy: { createdAt: "desc" }
     })
-  ])) as [any, any[], any[]];
+  ])) as [any, any[], any[], any[]];
 
   const vendorBuckets = new Map<string, any>();
   const riderBuckets = new Map<string, any>();
   const minimumPayout = Number(settings.minimumPayoutAmount);
+  const requestSummaries = payoutRequests.map((request) => ({
+    id: request.id,
+    targetType: request.targetType,
+    status: request.status,
+    requestedAmount: Number(request.requestedAmount),
+    approvedAmount: Number(request.approvedAmount ?? request.requestedAmount),
+    createdAt: request.createdAt,
+    reviewedAt: request.reviewedAt,
+    paidAt: request.paidAt,
+    note: request.note ?? null,
+    adminNote: request.adminNote ?? null,
+    payeeName:
+      request.targetType === PayoutRequestTarget.VENDOR
+        ? request.vendorProfile?.businessName ?? "Vendor"
+        : `${request.riderProfile?.user?.firstName ?? ""} ${request.riderProfile?.user?.lastName ?? ""}`.trim() || "Rider",
+    contactName:
+      request.targetType === PayoutRequestTarget.VENDOR
+        ? `${request.vendorProfile?.user?.firstName ?? ""} ${request.vendorProfile?.user?.lastName ?? ""}`.trim()
+        : request.requester?.email ?? "",
+    requesterUserId: request.requesterUserId
+  }));
 
   deliveredOrders.forEach((order) => {
     const vendor = order.restaurant.vendorProfile;
@@ -161,6 +201,10 @@ async function buildSettlementPreview() {
         payoutAccountNumber: vendor.payoutAccountNumber,
         payoutVerified: vendor.payoutVerified,
         totalAmount: 0,
+        pendingAmount: 0,
+        approvedAmount: 0,
+        paidAmount: 0,
+        availableAmount: 0,
         orders: []
       };
       current.totalAmount += vendorNet;
@@ -179,6 +223,10 @@ async function buildSettlementPreview() {
         payeeName: `${rider.user?.firstName ?? ""} ${rider.user?.lastName ?? ""}`.trim() || "Rider",
         vehicleType: rider.vehicleType,
         totalAmount: 0,
+        pendingAmount: 0,
+        approvedAmount: 0,
+        paidAmount: 0,
+        availableAmount: 0,
         orders: []
       };
       current.totalAmount += riderNet;
@@ -191,11 +239,43 @@ async function buildSettlementPreview() {
     }
   });
 
+  requestSummaries.forEach((request) => {
+    if (request.targetType === PayoutRequestTarget.VENDOR) {
+      const vendorProfileId = payoutRequests.find((item) => item.id === request.id)?.vendorProfileId;
+      if (vendorProfileId && vendorBuckets.has(vendorProfileId)) {
+        const bucket = vendorBuckets.get(vendorProfileId);
+        if (request.status === PayoutRequestStatus.PENDING) bucket.pendingAmount += request.requestedAmount;
+        if (request.status === PayoutRequestStatus.APPROVED) bucket.approvedAmount += request.approvedAmount;
+        if (request.status === PayoutRequestStatus.PAID) bucket.paidAmount += request.approvedAmount;
+      }
+    }
+
+    if (request.targetType === PayoutRequestTarget.RIDER) {
+      const riderProfileId = payoutRequests.find((item) => item.id === request.id)?.riderProfileId;
+      if (riderProfileId && riderBuckets.has(riderProfileId)) {
+        const bucket = riderBuckets.get(riderProfileId);
+        if (request.status === PayoutRequestStatus.PENDING) bucket.pendingAmount += request.requestedAmount;
+        if (request.status === PayoutRequestStatus.APPROVED) bucket.approvedAmount += request.approvedAmount;
+        if (request.status === PayoutRequestStatus.PAID) bucket.paidAmount += request.approvedAmount;
+      }
+    }
+  });
+
   const vendors = Array.from(vendorBuckets.values())
     .map((item) => ({
       ...item,
       totalAmount: Number(item.totalAmount.toFixed(2)),
-      eligible: item.totalAmount >= minimumPayout && Boolean(item.payoutVerified)
+      pendingAmount: Number(item.pendingAmount.toFixed(2)),
+      approvedAmount: Number(item.approvedAmount.toFixed(2)),
+      paidAmount: Number(item.paidAmount.toFixed(2)),
+      availableAmount: Number(
+        Math.max(item.totalAmount - item.pendingAmount - item.approvedAmount - item.paidAmount, 0).toFixed(2)
+      ),
+      eligible: false
+    }))
+    .map((item) => ({
+      ...item,
+      eligible: item.availableAmount >= minimumPayout && Boolean(item.payoutVerified)
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
 
@@ -203,9 +283,22 @@ async function buildSettlementPreview() {
     .map((item) => ({
       ...item,
       totalAmount: Number(item.totalAmount.toFixed(2)),
-      eligible: item.totalAmount >= minimumPayout
+      pendingAmount: Number(item.pendingAmount.toFixed(2)),
+      approvedAmount: Number(item.approvedAmount.toFixed(2)),
+      paidAmount: Number(item.paidAmount.toFixed(2)),
+      availableAmount: Number(
+        Math.max(item.totalAmount - item.pendingAmount - item.approvedAmount - item.paidAmount, 0).toFixed(2)
+      ),
+      eligible: false
+    }))
+    .map((item) => ({
+      ...item,
+      eligible: item.availableAmount >= minimumPayout
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const pendingRequests = requestSummaries.filter((item) => item.status === PayoutRequestStatus.PENDING);
+  const approvedRequests = requestSummaries.filter((item) => item.status === PayoutRequestStatus.APPROVED);
 
   return {
     settings: {
@@ -216,11 +309,21 @@ async function buildSettlementPreview() {
       eligibleVendorCount: vendors.filter((item) => item.eligible).length,
       eligibleRiderCount: riders.filter((item) => item.eligible).length,
       vendorPayoutDue: Number(vendors.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2)),
-      riderPayoutDue: Number(riders.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2))
+      riderPayoutDue: Number(riders.reduce((sum, item) => sum + item.totalAmount, 0).toFixed(2)),
+      pendingRequestCount: pendingRequests.length,
+      approvedRequestCount: approvedRequests.length,
+      approvedRequestAmount: Number(
+        approvedRequests.reduce((sum, item) => sum + item.approvedAmount, 0).toFixed(2)
+      )
     },
     vendors,
     riders,
-    batches
+    batches,
+    payoutRequests: {
+      pending: pendingRequests,
+      approved: approvedRequests,
+      recent: requestSummaries.slice(0, 12)
+    }
   };
 }
 
@@ -801,14 +904,126 @@ export const adminController = {
     res.json(preview);
   },
 
+  async payoutRequests(_req: Request, res: Response) {
+    const preview = await buildSettlementPreview();
+    res.json(preview.payoutRequests);
+  },
+
+  async approvePayoutRequest(req: Request, res: Response) {
+    const requestId = String(req.params.requestId);
+    const payoutRequest = await payoutRequestDelegate.payoutRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        vendorProfile: {
+          include: { user: true }
+        },
+        riderProfile: {
+          include: { user: true }
+        }
+      }
+    });
+
+    if (!payoutRequest) {
+      return res.status(404).json({ message: "Payout request not found." });
+    }
+
+    if (payoutRequest.status !== PayoutRequestStatus.PENDING) {
+      return res.status(400).json({ message: "Only pending payout requests can be approved." });
+    }
+
+    const updated = await payoutRequestDelegate.payoutRequest.update({
+      where: { id: requestId },
+      data: {
+        status: PayoutRequestStatus.APPROVED,
+        approvedAmount: payoutRequest.requestedAmount,
+        adminNote: req.body.adminNote ?? null,
+        reviewedById: req.user!.sub,
+        reviewedAt: new Date()
+      }
+    });
+
+    const targetUserId = payoutRequest.targetType === PayoutRequestTarget.VENDOR
+      ? payoutRequest.vendorProfile?.userId
+      : payoutRequest.riderProfile?.userId;
+
+    if (targetUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          title: "Payout request approved",
+          body: `Your payout request for GHS ${Number(updated.approvedAmount ?? updated.requestedAmount).toLocaleString()} was approved by admin.`,
+          payload: {
+            type: "PAYOUT_REQUEST_APPROVED",
+            requestId: updated.id
+          }
+        }
+      });
+    }
+
+    res.json(updated);
+  },
+
+  async rejectPayoutRequest(req: Request, res: Response) {
+    const requestId = String(req.params.requestId);
+    const payoutRequest = await payoutRequestDelegate.payoutRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        vendorProfile: true,
+        riderProfile: true
+      }
+    });
+
+    if (!payoutRequest) {
+      return res.status(404).json({ message: "Payout request not found." });
+    }
+
+    if (payoutRequest.status !== PayoutRequestStatus.PENDING) {
+      return res.status(400).json({ message: "Only pending payout requests can be rejected." });
+    }
+
+    const updated = await payoutRequestDelegate.payoutRequest.update({
+      where: { id: requestId },
+      data: {
+        status: PayoutRequestStatus.REJECTED,
+        adminNote: req.body.adminNote ?? null,
+        reviewedById: req.user!.sub,
+        reviewedAt: new Date()
+      }
+    });
+
+    const targetUserId = payoutRequest.targetType === PayoutRequestTarget.VENDOR
+      ? payoutRequest.vendorProfile?.userId
+      : payoutRequest.riderProfile?.userId;
+
+    if (targetUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          title: "Payout request rejected",
+          body: "Your payout request was reviewed and needs attention before it can be paid out.",
+          payload: {
+            type: "PAYOUT_REQUEST_REJECTED",
+            requestId: updated.id
+          }
+        }
+      });
+    }
+
+    res.json(updated);
+  },
+
   async createSettlementBatch(req: Request, res: Response) {
     const preview = await buildSettlementPreview();
     const target = String(req.body.target);
-    const vendors = target === "RIDERS" ? [] : preview.vendors.filter((item: any) => item.eligible);
-    const riders = target === "VENDORS" ? [] : preview.riders.filter((item: any) => item.eligible);
-    const totalAmount =
-      vendors.reduce((sum: number, item: any) => sum + item.totalAmount, 0) +
-      riders.reduce((sum: number, item: any) => sum + item.totalAmount, 0);
+    const approvedRequests = (preview.payoutRequests?.approved ?? []).filter((item: any) => {
+      if (target === "ALL") return true;
+      if (target === "VENDORS") return item.targetType === PayoutRequestTarget.VENDOR;
+      return item.targetType === PayoutRequestTarget.RIDER;
+    });
+    const totalAmount = approvedRequests.reduce((sum: number, item: any) => sum + item.approvedAmount, 0);
+
+    const vendors = approvedRequests.filter((item: any) => item.targetType === PayoutRequestTarget.VENDOR);
+    const riders = approvedRequests.filter((item: any) => item.targetType === PayoutRequestTarget.RIDER);
 
     const batch = await prisma.auditLog.create({
       data: {
@@ -828,6 +1043,18 @@ export const adminController = {
         }
       }
     });
+
+    if (approvedRequests.length) {
+      await payoutRequestDelegate.payoutRequest.updateMany({
+        where: {
+          id: { in: approvedRequests.map((item: any) => item.id) }
+        },
+        data: {
+          status: PayoutRequestStatus.PAID,
+          paidAt: new Date()
+        }
+      });
+    }
 
     res.status(201).json({
       created: true,

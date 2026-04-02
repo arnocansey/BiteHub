@@ -15,18 +15,20 @@ export const checkoutSchema = z.object({
   restaurantId: z.string().min(1),
   deliveryAddressId: z.string().min(1),
   promoCodeId: z.string().optional(),
-  subtotalAmount: z.number().nonnegative(),
-  deliveryFee: z.number().nonnegative(),
+  subtotalAmount: z.number().nonnegative().optional(),
+  deliveryFee: z.number().nonnegative().optional(),
   discountAmount: z.number().nonnegative().optional(),
-  totalAmount: z.number().nonnegative(),
+  totalAmount: z.number().nonnegative().optional(),
   customerNotes: z.string().max(300).optional(),
   paymentMethod: z.nativeEnum(PaymentMethod),
   items: z.array(
     z.object({
       menuItemId: z.string().min(1),
       quantity: z.number().int().positive(),
-      unitPrice: z.number().nonnegative(),
-      totalPrice: z.number().nonnegative()
+      selectedOptionIds: z.array(z.string().min(1)).optional(),
+      note: z.string().max(240).optional(),
+      unitPrice: z.number().nonnegative().optional(),
+      totalPrice: z.number().nonnegative().optional()
     })
   )
 });
@@ -262,12 +264,24 @@ export const settlementActionSchema = z.object({
   target: z.enum(["VENDORS", "RIDERS", "ALL"])
 });
 
+export const payoutRequestSchema = z.object({
+  note: z.string().max(240).optional()
+});
+
+export const payoutRequestReviewSchema = z.object({
+  adminNote: z.string().max(240).optional()
+});
+
 export const createMenuItemSchema = z.object({
   restaurantId: z.string().min(1),
   categoryId: z.string().min(1).optional(),
   name: z.string().min(2).max(120),
   description: z.string().max(500).optional(),
   price: z.number().positive(),
+  specialPrice: z.number().positive().optional(),
+  specialPriceLabel: z.string().max(80).optional(),
+  specialStartsAt: z.string().datetime().optional(),
+  specialEndsAt: z.string().datetime().optional(),
   imageUrl: z.string().url().optional(),
   status: z.nativeEnum(MenuItemStatus).optional(),
   preparationMins: z.number().int().positive().max(240).optional(),
@@ -275,7 +289,33 @@ export const createMenuItemSchema = z.object({
   isFeatured: z.boolean().optional(),
   badgeText: z.string().max(60).optional(),
   spiceLevel: z.number().int().min(0).max(5).optional(),
-  calories: z.number().int().min(0).max(5000).optional()
+  calories: z.number().int().min(0).max(5000).optional(),
+  modifierGroups: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(80),
+        description: z.string().max(160).optional(),
+        selectionType: z.enum(["SINGLE", "MULTIPLE"]).optional(),
+        minSelect: z.number().int().min(0).max(20).optional(),
+        maxSelect: z.number().int().min(1).max(20).nullable().optional(),
+        isRequired: z.boolean().optional(),
+        sortOrder: z.number().int().min(0).max(1000).optional(),
+        options: z
+          .array(
+            z.object({
+              name: z.string().min(1).max(80),
+              priceDelta: z.number().min(0).optional(),
+              isDefault: z.boolean().optional(),
+              isAvailable: z.boolean().optional(),
+              sortOrder: z.number().int().min(0).max(1000).optional()
+            })
+          )
+          .min(1)
+          .max(20)
+      })
+    )
+    .max(12)
+    .optional()
 });
 
 export const updateMenuItemSchema = createMenuItemSchema.partial().omit({

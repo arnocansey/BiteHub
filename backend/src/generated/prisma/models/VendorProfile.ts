@@ -241,6 +241,7 @@ export type VendorProfileWhereInput = {
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   restaurants?: Prisma.RestaurantListRelationFilter
   qualityScores?: Prisma.QualityScoreListRelationFilter
+  payoutRequests?: Prisma.PayoutRequestListRelationFilter
 }
 
 export type VendorProfileOrderByWithRelationInput = {
@@ -259,6 +260,7 @@ export type VendorProfileOrderByWithRelationInput = {
   user?: Prisma.UserOrderByWithRelationInput
   restaurants?: Prisma.RestaurantOrderByRelationAggregateInput
   qualityScores?: Prisma.QualityScoreOrderByRelationAggregateInput
+  payoutRequests?: Prisma.PayoutRequestOrderByRelationAggregateInput
 }
 
 export type VendorProfileWhereUniqueInput = Prisma.AtLeast<{
@@ -280,6 +282,7 @@ export type VendorProfileWhereUniqueInput = Prisma.AtLeast<{
   user?: Prisma.XOR<Prisma.UserScalarRelationFilter, Prisma.UserWhereInput>
   restaurants?: Prisma.RestaurantListRelationFilter
   qualityScores?: Prisma.QualityScoreListRelationFilter
+  payoutRequests?: Prisma.PayoutRequestListRelationFilter
 }, "id" | "userId">
 
 export type VendorProfileOrderByWithAggregationInput = {
@@ -333,6 +336,7 @@ export type VendorProfileCreateInput = {
   user: Prisma.UserCreateNestedOneWithoutVendorProfileInput
   restaurants?: Prisma.RestaurantCreateNestedManyWithoutVendorProfileInput
   qualityScores?: Prisma.QualityScoreCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileUncheckedCreateInput = {
@@ -350,6 +354,7 @@ export type VendorProfileUncheckedCreateInput = {
   payoutVerified?: boolean
   restaurants?: Prisma.RestaurantUncheckedCreateNestedManyWithoutVendorProfileInput
   qualityScores?: Prisma.QualityScoreUncheckedCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileUpdateInput = {
@@ -367,6 +372,7 @@ export type VendorProfileUpdateInput = {
   user?: Prisma.UserUpdateOneRequiredWithoutVendorProfileNestedInput
   restaurants?: Prisma.RestaurantUpdateManyWithoutVendorProfileNestedInput
   qualityScores?: Prisma.QualityScoreUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutVendorProfileNestedInput
 }
 
 export type VendorProfileUncheckedUpdateInput = {
@@ -384,6 +390,7 @@ export type VendorProfileUncheckedUpdateInput = {
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
   restaurants?: Prisma.RestaurantUncheckedUpdateManyWithoutVendorProfileNestedInput
   qualityScores?: Prisma.QualityScoreUncheckedUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutVendorProfileNestedInput
 }
 
 export type VendorProfileCreateManyInput = {
@@ -535,6 +542,22 @@ export type VendorProfileUpdateOneRequiredWithoutRestaurantsNestedInput = {
   update?: Prisma.XOR<Prisma.XOR<Prisma.VendorProfileUpdateToOneWithWhereWithoutRestaurantsInput, Prisma.VendorProfileUpdateWithoutRestaurantsInput>, Prisma.VendorProfileUncheckedUpdateWithoutRestaurantsInput>
 }
 
+export type VendorProfileCreateNestedOneWithoutPayoutRequestsInput = {
+  create?: Prisma.XOR<Prisma.VendorProfileCreateWithoutPayoutRequestsInput, Prisma.VendorProfileUncheckedCreateWithoutPayoutRequestsInput>
+  connectOrCreate?: Prisma.VendorProfileCreateOrConnectWithoutPayoutRequestsInput
+  connect?: Prisma.VendorProfileWhereUniqueInput
+}
+
+export type VendorProfileUpdateOneWithoutPayoutRequestsNestedInput = {
+  create?: Prisma.XOR<Prisma.VendorProfileCreateWithoutPayoutRequestsInput, Prisma.VendorProfileUncheckedCreateWithoutPayoutRequestsInput>
+  connectOrCreate?: Prisma.VendorProfileCreateOrConnectWithoutPayoutRequestsInput
+  upsert?: Prisma.VendorProfileUpsertWithoutPayoutRequestsInput
+  disconnect?: Prisma.VendorProfileWhereInput | boolean
+  delete?: Prisma.VendorProfileWhereInput | boolean
+  connect?: Prisma.VendorProfileWhereUniqueInput
+  update?: Prisma.XOR<Prisma.XOR<Prisma.VendorProfileUpdateToOneWithWhereWithoutPayoutRequestsInput, Prisma.VendorProfileUpdateWithoutPayoutRequestsInput>, Prisma.VendorProfileUncheckedUpdateWithoutPayoutRequestsInput>
+}
+
 export type VendorProfileCreateNestedOneWithoutQualityScoresInput = {
   create?: Prisma.XOR<Prisma.VendorProfileCreateWithoutQualityScoresInput, Prisma.VendorProfileUncheckedCreateWithoutQualityScoresInput>
   connectOrCreate?: Prisma.VendorProfileCreateOrConnectWithoutQualityScoresInput
@@ -565,6 +588,7 @@ export type VendorProfileCreateWithoutUserInput = {
   payoutVerified?: boolean
   restaurants?: Prisma.RestaurantCreateNestedManyWithoutVendorProfileInput
   qualityScores?: Prisma.QualityScoreCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileUncheckedCreateWithoutUserInput = {
@@ -581,6 +605,7 @@ export type VendorProfileUncheckedCreateWithoutUserInput = {
   payoutVerified?: boolean
   restaurants?: Prisma.RestaurantUncheckedCreateNestedManyWithoutVendorProfileInput
   qualityScores?: Prisma.QualityScoreUncheckedCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileCreateOrConnectWithoutUserInput = {
@@ -613,6 +638,7 @@ export type VendorProfileUpdateWithoutUserInput = {
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
   restaurants?: Prisma.RestaurantUpdateManyWithoutVendorProfileNestedInput
   qualityScores?: Prisma.QualityScoreUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutVendorProfileNestedInput
 }
 
 export type VendorProfileUncheckedUpdateWithoutUserInput = {
@@ -629,6 +655,7 @@ export type VendorProfileUncheckedUpdateWithoutUserInput = {
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
   restaurants?: Prisma.RestaurantUncheckedUpdateManyWithoutVendorProfileNestedInput
   qualityScores?: Prisma.QualityScoreUncheckedUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutVendorProfileNestedInput
 }
 
 export type VendorProfileCreateWithoutRestaurantsInput = {
@@ -645,6 +672,7 @@ export type VendorProfileCreateWithoutRestaurantsInput = {
   payoutVerified?: boolean
   user: Prisma.UserCreateNestedOneWithoutVendorProfileInput
   qualityScores?: Prisma.QualityScoreCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileUncheckedCreateWithoutRestaurantsInput = {
@@ -661,6 +689,7 @@ export type VendorProfileUncheckedCreateWithoutRestaurantsInput = {
   payoutAccountName?: string | null
   payoutVerified?: boolean
   qualityScores?: Prisma.QualityScoreUncheckedCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileCreateOrConnectWithoutRestaurantsInput = {
@@ -693,6 +722,7 @@ export type VendorProfileUpdateWithoutRestaurantsInput = {
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
   user?: Prisma.UserUpdateOneRequiredWithoutVendorProfileNestedInput
   qualityScores?: Prisma.QualityScoreUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutVendorProfileNestedInput
 }
 
 export type VendorProfileUncheckedUpdateWithoutRestaurantsInput = {
@@ -708,6 +738,91 @@ export type VendorProfileUncheckedUpdateWithoutRestaurantsInput = {
   payoutAccountNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   payoutAccountName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  qualityScores?: Prisma.QualityScoreUncheckedUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutVendorProfileNestedInput
+}
+
+export type VendorProfileCreateWithoutPayoutRequestsInput = {
+  id?: string
+  businessName: string
+  approvalStatus?: $Enums.ApprovalStatus
+  autoAcceptOrders?: boolean
+  notifyOnNewOrders?: boolean
+  notifyOnPromotions?: boolean
+  payoutAccount?: string | null
+  payoutBankName?: string | null
+  payoutAccountNumber?: string | null
+  payoutAccountName?: string | null
+  payoutVerified?: boolean
+  user: Prisma.UserCreateNestedOneWithoutVendorProfileInput
+  restaurants?: Prisma.RestaurantCreateNestedManyWithoutVendorProfileInput
+  qualityScores?: Prisma.QualityScoreCreateNestedManyWithoutVendorProfileInput
+}
+
+export type VendorProfileUncheckedCreateWithoutPayoutRequestsInput = {
+  id?: string
+  userId: string
+  businessName: string
+  approvalStatus?: $Enums.ApprovalStatus
+  autoAcceptOrders?: boolean
+  notifyOnNewOrders?: boolean
+  notifyOnPromotions?: boolean
+  payoutAccount?: string | null
+  payoutBankName?: string | null
+  payoutAccountNumber?: string | null
+  payoutAccountName?: string | null
+  payoutVerified?: boolean
+  restaurants?: Prisma.RestaurantUncheckedCreateNestedManyWithoutVendorProfileInput
+  qualityScores?: Prisma.QualityScoreUncheckedCreateNestedManyWithoutVendorProfileInput
+}
+
+export type VendorProfileCreateOrConnectWithoutPayoutRequestsInput = {
+  where: Prisma.VendorProfileWhereUniqueInput
+  create: Prisma.XOR<Prisma.VendorProfileCreateWithoutPayoutRequestsInput, Prisma.VendorProfileUncheckedCreateWithoutPayoutRequestsInput>
+}
+
+export type VendorProfileUpsertWithoutPayoutRequestsInput = {
+  update: Prisma.XOR<Prisma.VendorProfileUpdateWithoutPayoutRequestsInput, Prisma.VendorProfileUncheckedUpdateWithoutPayoutRequestsInput>
+  create: Prisma.XOR<Prisma.VendorProfileCreateWithoutPayoutRequestsInput, Prisma.VendorProfileUncheckedCreateWithoutPayoutRequestsInput>
+  where?: Prisma.VendorProfileWhereInput
+}
+
+export type VendorProfileUpdateToOneWithWhereWithoutPayoutRequestsInput = {
+  where?: Prisma.VendorProfileWhereInput
+  data: Prisma.XOR<Prisma.VendorProfileUpdateWithoutPayoutRequestsInput, Prisma.VendorProfileUncheckedUpdateWithoutPayoutRequestsInput>
+}
+
+export type VendorProfileUpdateWithoutPayoutRequestsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  businessName?: Prisma.StringFieldUpdateOperationsInput | string
+  approvalStatus?: Prisma.EnumApprovalStatusFieldUpdateOperationsInput | $Enums.ApprovalStatus
+  autoAcceptOrders?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  notifyOnNewOrders?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  notifyOnPromotions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  payoutAccount?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutBankName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutAccountNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutAccountName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  user?: Prisma.UserUpdateOneRequiredWithoutVendorProfileNestedInput
+  restaurants?: Prisma.RestaurantUpdateManyWithoutVendorProfileNestedInput
+  qualityScores?: Prisma.QualityScoreUpdateManyWithoutVendorProfileNestedInput
+}
+
+export type VendorProfileUncheckedUpdateWithoutPayoutRequestsInput = {
+  id?: Prisma.StringFieldUpdateOperationsInput | string
+  userId?: Prisma.StringFieldUpdateOperationsInput | string
+  businessName?: Prisma.StringFieldUpdateOperationsInput | string
+  approvalStatus?: Prisma.EnumApprovalStatusFieldUpdateOperationsInput | $Enums.ApprovalStatus
+  autoAcceptOrders?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  notifyOnNewOrders?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  notifyOnPromotions?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  payoutAccount?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutBankName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutAccountNumber?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutAccountName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  restaurants?: Prisma.RestaurantUncheckedUpdateManyWithoutVendorProfileNestedInput
   qualityScores?: Prisma.QualityScoreUncheckedUpdateManyWithoutVendorProfileNestedInput
 }
 
@@ -725,6 +840,7 @@ export type VendorProfileCreateWithoutQualityScoresInput = {
   payoutVerified?: boolean
   user: Prisma.UserCreateNestedOneWithoutVendorProfileInput
   restaurants?: Prisma.RestaurantCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileUncheckedCreateWithoutQualityScoresInput = {
@@ -741,6 +857,7 @@ export type VendorProfileUncheckedCreateWithoutQualityScoresInput = {
   payoutAccountName?: string | null
   payoutVerified?: boolean
   restaurants?: Prisma.RestaurantUncheckedCreateNestedManyWithoutVendorProfileInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedCreateNestedManyWithoutVendorProfileInput
 }
 
 export type VendorProfileCreateOrConnectWithoutQualityScoresInput = {
@@ -773,6 +890,7 @@ export type VendorProfileUpdateWithoutQualityScoresInput = {
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
   user?: Prisma.UserUpdateOneRequiredWithoutVendorProfileNestedInput
   restaurants?: Prisma.RestaurantUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUpdateManyWithoutVendorProfileNestedInput
 }
 
 export type VendorProfileUncheckedUpdateWithoutQualityScoresInput = {
@@ -789,6 +907,7 @@ export type VendorProfileUncheckedUpdateWithoutQualityScoresInput = {
   payoutAccountName?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   payoutVerified?: Prisma.BoolFieldUpdateOperationsInput | boolean
   restaurants?: Prisma.RestaurantUncheckedUpdateManyWithoutVendorProfileNestedInput
+  payoutRequests?: Prisma.PayoutRequestUncheckedUpdateManyWithoutVendorProfileNestedInput
 }
 
 
@@ -799,11 +918,13 @@ export type VendorProfileUncheckedUpdateWithoutQualityScoresInput = {
 export type VendorProfileCountOutputType = {
   restaurants: number
   qualityScores: number
+  payoutRequests: number
 }
 
 export type VendorProfileCountOutputTypeSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   restaurants?: boolean | VendorProfileCountOutputTypeCountRestaurantsArgs
   qualityScores?: boolean | VendorProfileCountOutputTypeCountQualityScoresArgs
+  payoutRequests?: boolean | VendorProfileCountOutputTypeCountPayoutRequestsArgs
 }
 
 /**
@@ -830,6 +951,13 @@ export type VendorProfileCountOutputTypeCountQualityScoresArgs<ExtArgs extends r
   where?: Prisma.QualityScoreWhereInput
 }
 
+/**
+ * VendorProfileCountOutputType without action
+ */
+export type VendorProfileCountOutputTypeCountPayoutRequestsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  where?: Prisma.PayoutRequestWhereInput
+}
+
 
 export type VendorProfileSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetSelect<{
   id?: boolean
@@ -847,6 +975,7 @@ export type VendorProfileSelect<ExtArgs extends runtime.Types.Extensions.Interna
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   restaurants?: boolean | Prisma.VendorProfile$restaurantsArgs<ExtArgs>
   qualityScores?: boolean | Prisma.VendorProfile$qualityScoresArgs<ExtArgs>
+  payoutRequests?: boolean | Prisma.VendorProfile$payoutRequestsArgs<ExtArgs>
   _count?: boolean | Prisma.VendorProfileCountOutputTypeDefaultArgs<ExtArgs>
 }, ExtArgs["result"]["vendorProfile"]>
 
@@ -902,6 +1031,7 @@ export type VendorProfileInclude<ExtArgs extends runtime.Types.Extensions.Intern
   user?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   restaurants?: boolean | Prisma.VendorProfile$restaurantsArgs<ExtArgs>
   qualityScores?: boolean | Prisma.VendorProfile$qualityScoresArgs<ExtArgs>
+  payoutRequests?: boolean | Prisma.VendorProfile$payoutRequestsArgs<ExtArgs>
   _count?: boolean | Prisma.VendorProfileCountOutputTypeDefaultArgs<ExtArgs>
 }
 export type VendorProfileIncludeCreateManyAndReturn<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
@@ -917,6 +1047,7 @@ export type $VendorProfilePayload<ExtArgs extends runtime.Types.Extensions.Inter
     user: Prisma.$UserPayload<ExtArgs>
     restaurants: Prisma.$RestaurantPayload<ExtArgs>[]
     qualityScores: Prisma.$QualityScorePayload<ExtArgs>[]
+    payoutRequests: Prisma.$PayoutRequestPayload<ExtArgs>[]
   }
   scalars: runtime.Types.Extensions.GetPayloadResult<{
     id: string
@@ -1328,6 +1459,7 @@ export interface Prisma__VendorProfileClient<T, Null = never, ExtArgs extends ru
   user<T extends Prisma.UserDefaultArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.UserDefaultArgs<ExtArgs>>): Prisma.Prisma__UserClient<runtime.Types.Result.GetResult<Prisma.$UserPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
   restaurants<T extends Prisma.VendorProfile$restaurantsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.VendorProfile$restaurantsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$RestaurantPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   qualityScores<T extends Prisma.VendorProfile$qualityScoresArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.VendorProfile$qualityScoresArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$QualityScorePayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+  payoutRequests<T extends Prisma.VendorProfile$payoutRequestsArgs<ExtArgs> = {}>(args?: Prisma.Subset<T, Prisma.VendorProfile$payoutRequestsArgs<ExtArgs>>): Prisma.PrismaPromise<runtime.Types.Result.GetResult<Prisma.$PayoutRequestPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
   /**
    * Attaches callbacks for the resolution and/or rejection of the Promise.
    * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -1815,6 +1947,30 @@ export type VendorProfile$qualityScoresArgs<ExtArgs extends runtime.Types.Extens
   take?: number
   skip?: number
   distinct?: Prisma.QualityScoreScalarFieldEnum | Prisma.QualityScoreScalarFieldEnum[]
+}
+
+/**
+ * VendorProfile.payoutRequests
+ */
+export type VendorProfile$payoutRequestsArgs<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
+  /**
+   * Select specific fields to fetch from the PayoutRequest
+   */
+  select?: Prisma.PayoutRequestSelect<ExtArgs> | null
+  /**
+   * Omit specific fields from the PayoutRequest
+   */
+  omit?: Prisma.PayoutRequestOmit<ExtArgs> | null
+  /**
+   * Choose, which related nodes to fetch as well
+   */
+  include?: Prisma.PayoutRequestInclude<ExtArgs> | null
+  where?: Prisma.PayoutRequestWhereInput
+  orderBy?: Prisma.PayoutRequestOrderByWithRelationInput | Prisma.PayoutRequestOrderByWithRelationInput[]
+  cursor?: Prisma.PayoutRequestWhereUniqueInput
+  take?: number
+  skip?: number
+  distinct?: Prisma.PayoutRequestScalarFieldEnum | Prisma.PayoutRequestScalarFieldEnum[]
 }
 
 /**

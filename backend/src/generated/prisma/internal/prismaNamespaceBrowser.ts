@@ -59,6 +59,8 @@ export const ModelName = {
   Category: 'Category',
   Restaurant: 'Restaurant',
   MenuItem: 'MenuItem',
+  MenuItemModifierGroup: 'MenuItemModifierGroup',
+  MenuItemModifierOption: 'MenuItemModifierOption',
   DietaryTag: 'DietaryTag',
   MenuItemDietaryTag: 'MenuItemDietaryTag',
   RestaurantCollection: 'RestaurantCollection',
@@ -79,6 +81,7 @@ export const ModelName = {
   OrderItem: 'OrderItem',
   Payment: 'Payment',
   OrderSettlement: 'OrderSettlement',
+  PayoutRequest: 'PayoutRequest',
   Delivery: 'Delivery',
   ForecastSnapshot: 'ForecastSnapshot',
   RiderIncentive: 'RiderIncentive',
@@ -233,6 +236,10 @@ export const MenuItemScalarFieldEnum = {
   name: 'name',
   description: 'description',
   price: 'price',
+  specialPrice: 'specialPrice',
+  specialPriceLabel: 'specialPriceLabel',
+  specialStartsAt: 'specialStartsAt',
+  specialEndsAt: 'specialEndsAt',
   imageUrl: 'imageUrl',
   status: 'status',
   preparationMins: 'preparationMins',
@@ -246,6 +253,34 @@ export const MenuItemScalarFieldEnum = {
 } as const
 
 export type MenuItemScalarFieldEnum = (typeof MenuItemScalarFieldEnum)[keyof typeof MenuItemScalarFieldEnum]
+
+
+export const MenuItemModifierGroupScalarFieldEnum = {
+  id: 'id',
+  menuItemId: 'menuItemId',
+  name: 'name',
+  description: 'description',
+  selectionType: 'selectionType',
+  minSelect: 'minSelect',
+  maxSelect: 'maxSelect',
+  isRequired: 'isRequired',
+  sortOrder: 'sortOrder'
+} as const
+
+export type MenuItemModifierGroupScalarFieldEnum = (typeof MenuItemModifierGroupScalarFieldEnum)[keyof typeof MenuItemModifierGroupScalarFieldEnum]
+
+
+export const MenuItemModifierOptionScalarFieldEnum = {
+  id: 'id',
+  modifierGroupId: 'modifierGroupId',
+  name: 'name',
+  priceDelta: 'priceDelta',
+  isDefault: 'isDefault',
+  isAvailable: 'isAvailable',
+  sortOrder: 'sortOrder'
+} as const
+
+export type MenuItemModifierOptionScalarFieldEnum = (typeof MenuItemModifierOptionScalarFieldEnum)[keyof typeof MenuItemModifierOptionScalarFieldEnum]
 
 
 export const DietaryTagScalarFieldEnum = {
@@ -504,7 +539,10 @@ export const OrderItemScalarFieldEnum = {
   menuItemId: 'menuItemId',
   quantity: 'quantity',
   unitPrice: 'unitPrice',
-  totalPrice: 'totalPrice'
+  totalPrice: 'totalPrice',
+  itemNameSnapshot: 'itemNameSnapshot',
+  customerNote: 'customerNote',
+  customizationSummary: 'customizationSummary'
 } as const
 
 export type OrderItemScalarFieldEnum = (typeof OrderItemScalarFieldEnum)[keyof typeof OrderItemScalarFieldEnum]
@@ -548,6 +586,27 @@ export const OrderSettlementScalarFieldEnum = {
 } as const
 
 export type OrderSettlementScalarFieldEnum = (typeof OrderSettlementScalarFieldEnum)[keyof typeof OrderSettlementScalarFieldEnum]
+
+
+export const PayoutRequestScalarFieldEnum = {
+  id: 'id',
+  targetType: 'targetType',
+  status: 'status',
+  requesterUserId: 'requesterUserId',
+  vendorProfileId: 'vendorProfileId',
+  riderProfileId: 'riderProfileId',
+  requestedAmount: 'requestedAmount',
+  approvedAmount: 'approvedAmount',
+  note: 'note',
+  adminNote: 'adminNote',
+  reviewedById: 'reviewedById',
+  reviewedAt: 'reviewedAt',
+  paidAt: 'paidAt',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+} as const
+
+export type PayoutRequestScalarFieldEnum = (typeof PayoutRequestScalarFieldEnum)[keyof typeof PayoutRequestScalarFieldEnum]
 
 
 export const DeliveryScalarFieldEnum = {

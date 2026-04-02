@@ -1,8 +1,14 @@
 import type { Request, Response } from "express";
 import { OperatingMode, OrderStatus, UserRole } from "../generated/prisma/client";
+import { PayoutRequestStatus, PayoutRequestTarget } from "../generated/prisma/enums";
 import { prisma } from "../config/prisma";
 import { emitOrderUpdate } from "../realtime/socket";
 import { createOrderEvent, createStatusEvent, upsertEtaPrediction } from "../services/order-trust.service";
+import { getVendorPayoutSnapshot } from "../services/payout-request.service";
+
+const payoutRequestDelegate = prisma as typeof prisma & {
+  payoutRequest: any;
+};
 
 function slugifyRestaurantName(name: string) {
   return name
@@ -11,6 +17,14 @@ function slugifyRestaurantName(name: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 48);
+}
+
+function buildPrepMinutes(order: any) {
+  const preparingEvent = (order.timelineEvents ?? []).find((event: any) => event.status === OrderStatus.PREPARING);
+  const readyEvent = (order.timelineEvents ?? []).find((event: any) => event.status === OrderStatus.READY_FOR_PICKUP);
+  if (!preparingEvent || !readyEvent) return null;
+  const diff = new Date(readyEvent.createdAt).getTime() - new Date(preparingEvent.createdAt).getTime();
+  return diff > 0 ? Math.round(diff / 60000) : null;
 }
 
 export const vendorController = {
@@ -41,6 +55,65 @@ export const vendorController = {
     });
 
     res.json(vendor);
+  },
+
+  async payoutRequests(req: Request, res: Response) {
+    const snapshot = await getVendorPayoutSnapshot(req.user!.sub);
+    res.json(snapshot);
+  },
+
+  async createPayoutRequest(req: Request, res: Response) {
+    const snapshot = await getVendorPayoutSnapshot(req.user!.sub);
+
+    if (!snapshot.payoutVerified) {
+      return res.status(400).json({ message: "Verify the vendor payout account before requesting a payout." });
+    }
+
+    if (snapshot.approvalStatus !== "APPROVED") {
+      return res.status(400).json({ message: "Vendor account must be approved before requesting a payout." });
+    }
+
+    if (snapshot.requests.some((item) => item.status === PayoutRequestStatus.PENDING)) {
+      return res.status(409).json({ message: "There is already a pending payout request awaiting admin review." });
+    }
+
+    if (snapshot.availableAmount < snapshot.minimumPayoutAmount) {
+      return res.status(400).json({
+        message: `Minimum payout request is GHS ${snapshot.minimumPayoutAmount.toLocaleString()}.`
+      });
+    }
+
+    const request = await payoutRequestDelegate.payoutRequest.create({
+      data: {
+        targetType: PayoutRequestTarget.VENDOR,
+        requesterUserId: req.user!.sub,
+        vendorProfileId: snapshot.profileId,
+        requestedAmount: snapshot.availableAmount,
+        note: req.body.note ?? null
+      }
+    });
+
+    const admins = await prisma.user.findMany({
+      where: { role: "ADMIN" },
+      select: { id: true }
+    });
+
+    if (admins.length) {
+      await prisma.notification.createMany({
+        data: admins.map((admin) => ({
+          userId: admin.id,
+          title: "Vendor payout request",
+          body: `${snapshot.payeeName} requested a payout of GHS ${snapshot.availableAmount.toLocaleString()}.`,
+          payload: {
+            type: "PAYOUT_REQUEST",
+            targetType: PayoutRequestTarget.VENDOR,
+            requestId: request.id
+          }
+        }))
+      });
+    }
+
+    res.status(201).json(request);
   },
 
   async restaurantsMe(req: Request, res: Response) {
@@ -150,7 +223,11 @@ export const vendorController = {
         delivery: true,
         payment: true,
         settlement: true,
-        deliveryAddress: true
+        deliveryAddress: true,
+        timelineEvents: {
+          orderBy: { createdAt: "desc" },
+          take: 6
+        }
       },
       orderBy: { placedAt: "desc" }
     } as any);
@@ -170,6 +247,14 @@ export const vendorController = {
       include: {
         restaurant: { select: { id: true, name: true, categoryId: true } },
         category: { select: { id: true, name: true, slug: true } },
+        modifierGroups: {
+          include: {
+            options: {
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+            }
+          },
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+        },
         _count: { select: { orderItems: true } }
       },
       orderBy: [{ restaurantId: "asc" }, { createdAt: "desc" }]
@@ -196,6 +281,10 @@ export const vendorController = {
         name: req.body.name,
         description: req.body.description ?? undefined,
         price: req.body.price,
+        specialPrice: req.body.specialPrice ?? undefined,
+        specialPriceLabel: req.body.specialPriceLabel ?? undefined,
+        specialStartsAt: req.body.specialStartsAt ? new Date(req.body.specialStartsAt) : undefined,
+        specialEndsAt: req.body.specialEndsAt ? new Date(req.body.specialEndsAt) : undefined,
         imageUrl: req.body.imageUrl ?? undefined,
         status: req.body.status,
         preparationMins: req.body.preparationMins,
@@ -203,11 +292,41 @@ export const vendorController = {
         isFeatured: req.body.isFeatured ?? false,
         badgeText: req.body.badgeText ?? undefined,
         spiceLevel: req.body.spiceLevel ?? undefined,
-        calories: req.body.calories ?? undefined
-      },
+        calories: req.body.calories ?? undefined,
+        modifierGroups: req.body.modifierGroups?.length
+          ? {
+              create: req.body.modifierGroups.map((group: any, groupIndex: number) => ({
+                name: group.name,
+                description: group.description ?? undefined,
+                selectionType: group.selectionType ?? "MULTIPLE",
+                minSelect: group.minSelect ?? 0,
+                maxSelect: group.maxSelect ?? null,
+                isRequired: group.isRequired ?? false,
+                sortOrder: group.sortOrder ?? groupIndex,
+                options: {
+                  create: (group.options ?? []).map((option: any, optionIndex: number) => ({
+                    name: option.name,
+                    priceDelta: option.priceDelta ?? 0,
+                    isDefault: option.isDefault ?? false,
+                    isAvailable: option.isAvailable ?? true,
+                    sortOrder: option.sortOrder ?? optionIndex
+                  }))
+                }
+              }))
+            }
+          : undefined
+      } as any,
       include: {
         restaurant: { select: { id: true, name: true, categoryId: true } },
         category: { select: { id: true, name: true, slug: true } },
+        modifierGroups: {
+          include: {
+            options: {
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+            }
+          },
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+        },
         _count: { select: { orderItems: true } }
       }
     });
@@ -232,10 +351,45 @@ export const vendorController = {
 
     const item = await prisma.menuItem.update({
       where: { id: menuItemId },
-      data: req.body,
+      data: {
+        ...req.body,
+        specialStartsAt: typeof req.body.specialStartsAt === "string" ? new Date(req.body.specialStartsAt) : req.body.specialStartsAt,
+        specialEndsAt: typeof req.body.specialEndsAt === "string" ? new Date(req.body.specialEndsAt) : req.body.specialEndsAt,
+        modifierGroups: Array.isArray(req.body.modifierGroups)
+          ? {
+              deleteMany: {},
+              create: req.body.modifierGroups.map((group: any, groupIndex: number) => ({
+                name: group.name,
+                description: group.description ?? undefined,
+                selectionType: group.selectionType ?? "MULTIPLE",
+                minSelect: group.minSelect ?? 0,
+                maxSelect: group.maxSelect ?? null,
+                isRequired: group.isRequired ?? false,
+                sortOrder: group.sortOrder ?? groupIndex,
+                options: {
+                  create: (group.options ?? []).map((option: any, optionIndex: number) => ({
+                    name: option.name,
+                    priceDelta: option.priceDelta ?? 0,
+                    isDefault: option.isDefault ?? false,
+                    isAvailable: option.isAvailable ?? true,
+                    sortOrder: option.sortOrder ?? optionIndex
+                  }))
+                }
+              }))
+            }
+          : undefined
+      },
       include: {
         restaurant: { select: { id: true, name: true, categoryId: true } },
         category: { select: { id: true, name: true, slug: true } },
+        modifierGroups: {
+          include: {
+            options: {
+              orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+            }
+          },
+          orderBy: [{ sortOrder: "asc" }, { id: "asc" }]
+        },
         _count: { select: { orderItems: true } }
       }
     });
@@ -421,5 +575,104 @@ export const vendorController = {
     });
 
     res.json({ forecasts, qualityScores });
+  },
+
+  async insights(req: Request, res: Response) {
+    const vendor = await prisma.vendorProfile.findUnique({
+      where: { userId: req.user!.sub },
+      include: { restaurants: true }
+    });
+
+    const restaurantIds = vendor?.restaurants.map((restaurant) => restaurant.id) ?? [];
+    const orders = (await prisma.order.findMany({
+      where: { restaurantId: { in: restaurantIds } },
+      include: {
+        items: { include: { menuItem: { select: { id: true, name: true } } } },
+        settlement: true,
+        timelineEvents: {
+          orderBy: { createdAt: "desc" },
+          take: 8
+        },
+        restaurant: { select: { id: true, name: true } }
+      },
+      orderBy: { placedAt: "desc" },
+      take: 150
+    } as any)) as any[];
+
+    const reviews = await prisma.review.findMany({
+      where: { restaurantId: { in: restaurantIds } },
+      include: {
+        user: { select: { firstName: true, lastName: true } },
+        restaurant: { select: { id: true, name: true } }
+      },
+      orderBy: { createdAt: "desc" },
+      take: 24
+    });
+
+    const hourMap = new Map<number, number>();
+    orders.forEach((order) => {
+      const hour = new Date(order.placedAt).getHours();
+      hourMap.set(hour, (hourMap.get(hour) ?? 0) + 1);
+    });
+
+    const peakHours = Array.from(hourMap.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([hour, ordersCount]) => ({
+        hour,
+        label: `${String(hour).padStart(2, "0")}:00`,
+        ordersCount
+      }));
+
+    const lostOrders = orders
+      .filter((order) => order.status === OrderStatus.REJECTED || order.status === OrderStatus.CANCELLED)
+      .map((order) => {
+        const lastStatusEvent = (order.timelineEvents ?? []).find((event: any) =>
+          [OrderStatus.REJECTED, OrderStatus.CANCELLED].includes(event.status)
+        );
+        return {
+          id: order.id,
+          restaurantName: order.restaurant?.name ?? "Restaurant",
+          status: order.status,
+          placedAt: order.placedAt,
+          amount: order.totalAmount,
+          reason: lastStatusEvent?.description ?? "No reason was captured for this order."
+        };
+      });
+
+    const todaysOrders = orders.filter((order) => {
+      const placedAt = new Date(order.placedAt);
+      const now = new Date();
+      return (
+        placedAt.getFullYear() === now.getFullYear() &&
+        placedAt.getMonth() === now.getMonth() &&
+        placedAt.getDate() === now.getDate()
+      );
+    });
+
+    const itemTotals = new Map<string, { name: string; count: number }>();
+    todaysOrders.forEach((order) => {
+      (order.items ?? []).forEach((item: any) => {
+        const key = item.menuItem?.id ?? item.menuItemId;
+        const existing = itemTotals.get(key) ?? { name: item.menuItem?.name ?? "Item", count: 0 };
+        existing.count += Number(item.quantity ?? 0);
+        itemTotals.set(key, existing);
+      });
+    });
+
+    const mostPopularItem = Array.from(itemTotals.values()).sort((a, b) => b.count - a.count)[0] ?? null;
+    const prepMinutes = todaysOrders.map(buildPrepMinutes).filter((value): value is number => typeof value === "number");
+    const averagePrepTime = prepMinutes.length ? Math.round(prepMinutes.reduce((sum, value) => sum + value, 0) / prepMinutes.length) : null;
+
+    res.json({
+      reviews,
+      peakHours,
+      lostOrders,
+      today: {
+        totalSales: todaysOrders.reduce((sum, order) => sum + Number(order.settlement?.vendorGrossSales ?? order.subtotalAmount ?? 0), 0),
+        mostPopularItem,
+        averagePrepTime
+      }
+    });
   }
 };
