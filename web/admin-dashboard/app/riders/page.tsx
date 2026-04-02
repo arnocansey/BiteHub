@@ -1,547 +1,728 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
-import { Bike, Clock3, Flame, MapPinned, Radio, Search, ShieldCheck, Siren, UserRound } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BadgeDollarSign, Bike, CreditCard, Radio, Search, ShieldBan, Sparkles, UserPlus, Users } from "lucide-react";
 import { AccessDeniedCard, AuthRequiredCard, EmptyCard, ErrorCard, LoadingCard } from "../../components/admin-states";
 import { DashboardShell } from "../../components/dashboard-shell";
 import { hasAdminAccess } from "../../lib/admin-access";
 import { adminRequest, useAdminData, useAdminSessionState } from "../../lib/admin-client";
 
-const GhanaDispatchMap = dynamic(
-  () => import("../../components/ghana-dispatch-map").then((mod) => mod.GhanaDispatchMap),
-  { ssr: false }
-);
+const GhanaDispatchMap = dynamic(() => import("../../components/ghana-dispatch-map").then((mod) => mod.GhanaDispatchMap), {
+  ssr: false
+});
 
-type RiderApproval = {
+type FleetTrip = {
   id: string;
-  vehicleType?: string | null;
-  approvalStatus?: string;
-  user?: { firstName?: string; lastName?: string; email?: string };
+  riderId?: string;
+  riderName?: string;
+  status: string;
+  customerName: string;
+  pickupAddress: string;
+  deliveryAddress: string;
+  restaurantName: string;
+  price: number;
+  distanceKm?: number | null;
+  createdAt?: string;
 };
 
-type OperationsIntelligence = {
-  activeRiderIncentives: number;
-  heatmap: Array<{ id: string; zoneLabel: string; demandLevel: number; supplyLevel: number; activeOrders: number }>;
-  qualityScores: Array<{
+type FleetCourier = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  vehicleType: string;
+  isOnline: boolean;
+  isActive: boolean;
+  currentLatitude?: number | null;
+  currentLongitude?: number | null;
+  metrics: {
+    finishedOrders: number;
+    activeTrips: number;
+    failedTrips: number;
+    completionRate: number;
+    acceptanceRate: number;
+    onlineHours: number;
+    earnings: number;
+    bonuses: number;
+    cashTrips: number;
+    cashlessTrips: number;
+    qualityScore?: number | null;
+  };
+  recentTrips: FleetTrip[];
+};
+
+type FleetLead = {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  vehicleType?: string;
+  createdAt?: string | null;
+};
+
+type FleetWorkspace = {
+  summary: {
+    courierCount: number;
+    onlineCouriers: number;
+    availableCouriers: number;
+    onTripCouriers: number;
+    leadsCount: number;
+    finishedOrders: number;
+    fleetIncome: number;
+    cashTrips: number;
+    cashlessTrips: number;
+    bonusIncome: number;
+    averageAcceptanceRate: number;
+  };
+  couriers: FleetCourier[];
+  courierLeads: FleetLead[];
+  tripHistory: FleetTrip[];
+  liveRoutes: Array<{
+    riderId: string;
+    riderName: string;
+    currentLatitude: number;
+    currentLongitude: number;
+    activity?: { restaurantName: string; pickupAddress: string; deliveryAddress: string; status: string } | null;
+  }>;
+  financials: {
+    totalFleetIncome: number;
+    cashTrips: number;
+    cashlessTrips: number;
+    bonusIncome: number;
+    payoutRequests: {
+      pendingAmount: number;
+      approvedAmount: number;
+      paidAmount: number;
+      recent: Array<{ id: string; status: string; approvedAmount: number; createdAt: string; riderName: string }>;
+    };
+  };
+  campaigns: Array<{
     id: string;
-    scoreType: string;
-    scoreValue: number;
-    trend?: string | null;
-    riderProfile?: { user?: { firstName?: string; lastName?: string } | null } | null;
+    title: string;
+    description: string;
+    zoneLabel?: string | null;
+    bonusAmount: number;
+    riderName: string;
   }>;
 };
 
-type AdminOrder = {
-  id: string;
-  status: string;
-  placedAt?: string;
-  totalAmount: number | string;
-  customer?: { firstName?: string; lastName?: string; email?: string } | null;
-  restaurant?: { name?: string } | null;
-  delivery?: {
-    riderProfile?: {
-      id: string;
-      user?: { firstName?: string; lastName?: string } | null;
-    } | null;
-  } | null;
-  etaPredictions?: Array<{ minutesAway?: number | null; confidencePercent?: number | null }> | null;
+type OperationsIntelligence = {
+  heatmap: Array<{ id: string; zoneLabel: string; demandLevel: number; supplyLevel: number; activeOrders: number }>;
 };
 
-type NearbyRider = {
-  id: string;
-  vehicleType?: string | null;
-  restaurantDistanceKm: number;
-  customerDistanceKm: number;
-  user?: { firstName?: string; lastName?: string } | null;
-};
+type RestaurantRecord = { id: string; name: string; address?: string | null; averageRating?: number | null; isFeatured?: boolean };
 
-type LiveRider = {
-  id: string;
-  isOnline: boolean;
-  vehicleType?: string | null;
-  currentLatitude: number;
-  currentLongitude: number;
-  user?: { firstName?: string; lastName?: string } | null;
-  activeDelivery?: {
-    id: string;
-    status: string;
-    orderId: string;
-    restaurantName?: string | null;
-  } | null;
-};
+const currency = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 2 });
+const emptyCourierForm = { firstName: "", lastName: "", email: "", phone: "", password: "", vehicleType: "" };
 
-type RestaurantRecord = {
-  id: string;
-  name: string;
-  address?: string | null;
-  averageRating?: number | null;
-  isFeatured?: boolean;
-};
-
-function formatRiderName(input?: { firstName?: string; lastName?: string } | null) {
-  const full = [input?.firstName, input?.lastName].filter(Boolean).join(" ").trim();
-  return full || "Unassigned rider";
+function formatMoney(value: number) {
+  return currency.format(Number(value ?? 0));
 }
 
-function formatCustomerName(input?: { firstName?: string; lastName?: string } | null) {
-  const full = [input?.firstName, input?.lastName].filter(Boolean).join(" ").trim();
-  return full || "Customer";
+function formatDate(value?: string | null) {
+  if (!value) return "No activity yet";
+  return new Intl.DateTimeFormat("en-GH", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
 }
 
-function getZoneHeat(zone: { demandLevel: number; supplyLevel: number; activeOrders: number }) {
-  const pressure = Number(zone.demandLevel ?? 0) - Number(zone.supplyLevel ?? 0) + Number(zone.activeOrders ?? 0) * 0.35;
-  if (pressure >= 6) {
-    return {
-      label: "Red zone",
-      dot: "bg-rose-500",
-      glow: "shadow-[0_0_0_14px_rgba(244,63,94,0.16)]",
-      chip: "bg-rose-500/15 text-rose-200",
-      panel: "border-rose-500/35 bg-rose-500/10"
-    };
-  }
-  if (pressure >= 3.5) {
-    return {
-      label: "Warm zone",
-      dot: "bg-orange-400",
-      glow: "shadow-[0_0_0_14px_rgba(251,146,60,0.16)]",
-      chip: "bg-orange-400/15 text-orange-200",
-      panel: "border-orange-400/30 bg-orange-400/10"
-    };
-  }
-  return {
-    label: "Balanced",
-    dot: "bg-emerald-400",
-    glow: "shadow-[0_0_0_14px_rgba(16,185,129,0.14)]",
-    chip: "bg-emerald-400/15 text-emerald-200",
-    panel: "border-emerald-400/25 bg-emerald-400/10"
-  };
+function getStatusTone(courier: FleetCourier) {
+  if (!courier.isActive) return "border-rose-400/30 bg-rose-500/15 text-rose-200";
+  if (courier.metrics.activeTrips > 0) return "border-violet-400/30 bg-violet-500/15 text-violet-200";
+  if (courier.isOnline) return "border-emerald-400/30 bg-emerald-500/15 text-emerald-200";
+  return "border-slate-500/30 bg-slate-500/15 text-slate-300";
+}
+
+function getStatusLabel(courier: FleetCourier) {
+  if (!courier.isActive) return "Blocked";
+  if (courier.metrics.activeTrips > 0) return "On trip";
+  if (courier.isOnline) return "Online";
+  return "Offline";
 }
 
 export default function RidersPage() {
   const { session, ready } = useAdminSessionState();
+  const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
-  const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
-  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
-  const query = useAdminData(
-    async () => {
-      const [pendingRiders, ops, orders, liveRiders, restaurants] = await Promise.all([
-        adminRequest<RiderApproval[]>("/admin/riders/pending"),
-        adminRequest<OperationsIntelligence>("/admin/reports/operations"),
-        adminRequest<AdminOrder[]>("/admin/orders"),
-        adminRequest<LiveRider[]>("/admin/riders/live"),
-        adminRequest<RestaurantRecord[]>("/admin/restaurants")
-      ]);
+  const [tripSearch, setTripSearch] = useState("");
+  const [leadActionLoading, setLeadActionLoading] = useState<string | null>(null);
+  const [savingCourier, setSavingCourier] = useState(false);
+  const [creatingCourier, setCreatingCourier] = useState(false);
+  const [showCreateCourier, setShowCreateCourier] = useState(false);
+  const [createCourierForm, setCreateCourierForm] = useState(emptyCourierForm);
+  const [editCourierForm, setEditCourierForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    vehicleType: "",
+    isOnline: false,
+    isActive: true
+  });
 
-      return { pendingRiders, ops, orders, liveRiders, restaurants };
-    },
-    [session?.accessToken]
-  );
+  const fleetQuery = useAdminData(() => adminRequest<FleetWorkspace>("/admin/riders/fleet"), [session?.accessToken]);
+  const opsQuery = useAdminData(() => adminRequest<OperationsIntelligence>("/admin/reports/operations"), [session?.accessToken]);
+  const restaurantsQuery = useAdminData(() => adminRequest<RestaurantRecord[]>("/admin/restaurants"), [session?.accessToken]);
 
-  async function approveRider(riderId: string) {
-    await adminRequest(`/admin/riders/${riderId}/approve`, { method: "PATCH" });
-    await query.refresh();
+  useEffect(() => {
+    if (!session?.accessToken) return;
+    const interval = window.setInterval(() => {
+      void fleetQuery.refresh().catch(() => null);
+      void opsQuery.refresh().catch(() => null);
+    }, 10_000);
+    return () => window.clearInterval(interval);
+  }, [session?.accessToken, fleetQuery.refresh, opsQuery.refresh]);
+
+  const fleet = fleetQuery.data;
+  const couriers = fleet?.couriers ?? [];
+  const leads = fleet?.courierLeads ?? [];
+  const heatmap = opsQuery.data?.heatmap ?? [];
+  const restaurants = restaurantsQuery.data ?? [];
+  const selectedCourier = couriers.find((courier) => courier.id === selectedCourierId) ?? couriers[0] ?? null;
+
+  useEffect(() => {
+    if (!selectedCourierId && couriers[0]) setSelectedCourierId(couriers[0].id);
+  }, [couriers, selectedCourierId]);
+
+  useEffect(() => {
+    if (!selectedZoneId && heatmap[0]) setSelectedZoneId(heatmap[0].id);
+  }, [heatmap, selectedZoneId]);
+
+  useEffect(() => {
+    if (!selectedCourier) return;
+    const [firstName = "", ...rest] = selectedCourier.name.split(" ");
+    setEditCourierForm({
+      firstName,
+      lastName: rest.join(" "),
+      phone: selectedCourier.phone ?? "",
+      vehicleType: selectedCourier.vehicleType === "Not set" ? "" : selectedCourier.vehicleType,
+      isOnline: selectedCourier.isOnline,
+      isActive: selectedCourier.isActive
+    });
+  }, [selectedCourier?.id]);
+
+  const filteredTrips = useMemo(() => {
+    const trips = fleet?.tripHistory ?? [];
+    if (!tripSearch.trim()) return trips;
+    const search = tripSearch.trim().toLowerCase();
+    return trips.filter((trip) =>
+      [trip.riderName, trip.customerName, trip.restaurantName, trip.pickupAddress, trip.deliveryAddress, trip.status]
+        .filter(Boolean)
+        .some((field) => String(field).toLowerCase().includes(search))
+    );
+  }, [fleet?.tripHistory, tripSearch]);
+
+  async function refreshAll() {
+    await Promise.all([fleetQuery.refresh(), opsQuery.refresh(), restaurantsQuery.refresh()]);
   }
 
-  const pendingRiders = query.data?.pendingRiders ?? [];
-  const heatmap = query.data?.ops.heatmap ?? [];
-  const orders = query.data?.orders ?? [];
-  const liveRidersData = query.data?.liveRiders ?? [];
-  const restaurants = query.data?.restaurants ?? [];
-  const riderQuality = (query.data?.ops.qualityScores ?? []).filter((score) => score.riderProfile?.user);
-  const activeOrdersList = orders.filter((order) =>
-    ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
-  );
-  const rankedZones = [...heatmap].sort((left, right) => {
-    const leftPressure = Number(left.demandLevel ?? 0) - Number(left.supplyLevel ?? 0) + Number(left.activeOrders ?? 0) * 0.35;
-    const rightPressure = Number(right.demandLevel ?? 0) - Number(right.supplyLevel ?? 0) + Number(right.activeOrders ?? 0) * 0.35;
-    return rightPressure - leftPressure;
-  });
-  useEffect(() => {
-    if (!selectedZoneId && rankedZones[0]) {
-      setSelectedZoneId(rankedZones[0].id);
+  async function reviewLead(riderId: string, status: "APPROVED" | "REJECTED") {
+    setLeadActionLoading(`${riderId}-${status}`);
+    try {
+      await adminRequest(`/admin/riders/${riderId}/review`, {
+        method: "PATCH",
+        body: JSON.stringify({ status })
+      });
+      await refreshAll();
+    } finally {
+      setLeadActionLoading(null);
     }
-  }, [rankedZones, selectedZoneId]);
+  }
 
-  const selectedZone = rankedZones.find((zone) => zone.id === selectedZoneId) ?? null;
-  const filteredOrders = selectedZone
-    ? activeOrdersList.filter((order) => {
-        const restaurantRecord = restaurants.find(
-          (restaurant) => restaurant.name?.trim().toLowerCase() === order.restaurant?.name?.trim().toLowerCase()
-        );
-        const searchText = `${restaurantRecord?.address ?? ""} ${restaurantRecord?.name ?? order.restaurant?.name ?? ""}`.toLowerCase();
-        return selectedZone.zoneLabel
-          .toLowerCase()
-          .split(/\s+/)
-          .some((token) => token.length > 2 && searchText.includes(token));
-      })
-    : activeOrdersList;
-  const focusedOrder = filteredOrders[0] ?? activeOrdersList[0] ?? orders[0] ?? null;
-  const focusedZone = selectedZone ?? rankedZones[0] ?? null;
-  const selectedLiveRider = liveRidersData.find((rider) => rider.id === selectedRiderId) ?? null;
-  const focusedQualitySignal = riderQuality[0] ?? null;
-  const focusedRestaurant =
-    restaurants.find((restaurant) => restaurant.id === selectedRestaurantId) ??
-    restaurants.find((restaurant) => restaurant.name?.trim().toLowerCase() === focusedOrder?.restaurant?.name?.trim().toLowerCase()) ??
-    null;
+  async function saveCourierChanges() {
+    if (!selectedCourier) return;
+    setSavingCourier(true);
+    try {
+      await adminRequest(`/admin/riders/${selectedCourier.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          firstName: editCourierForm.firstName,
+          lastName: editCourierForm.lastName,
+          phone: editCourierForm.phone || null,
+          vehicleType: editCourierForm.vehicleType || null,
+          isOnline: editCourierForm.isOnline,
+          isActive: editCourierForm.isActive
+        })
+      });
+      await refreshAll();
+    } finally {
+      setSavingCourier(false);
+    }
+  }
 
-  const nearbyRidersQuery = useAdminData(
-    () =>
-      focusedOrder?.id
-        ? adminRequest<NearbyRider[]>(`/admin/orders/${focusedOrder.id}/nearby-riders`)
-        : Promise.resolve([] as NearbyRider[]),
-    [session?.accessToken, focusedOrder?.id]
-  );
-
-  const nearbyRiders = nearbyRidersQuery.data ?? [];
-  const liveOrders = activeOrdersList.length;
-  const activeDrivers = nearbyRiders.length || riderQuality.length;
-  const pendingPickups = pendingRiders.length;
-  const averageDeliveryMinutes =
-    activeOrdersList.length > 0
-      ? Math.round(
-          activeOrdersList.reduce((sum, order) => sum + Number(order.etaPredictions?.[0]?.minutesAway ?? 24), 0) /
-            activeOrdersList.length
-        )
-      : heatmap.length > 0
-        ? Math.round(heatmap.reduce((sum, zone) => sum + Number(zone.demandLevel ?? 0) * 3.2, 18) / heatmap.length)
-        : 24;
-
-  const feedRows = filteredOrders.map((order) => ({
-    id: order.id,
-    orderCode: order.id.slice(0, 8).toUpperCase(),
-    customer: formatCustomerName(order.customer),
-    items: "Live order",
-    restaurant: order.restaurant?.name ?? "Restaurant",
-    driver: order.delivery?.riderProfile?.user ? formatRiderName(order.delivery.riderProfile.user) : "Awaiting rider",
-    status: order.status.replaceAll("_", " "),
-    eta: `${Math.max(10, Number(order.etaPredictions?.[0]?.minutesAway ?? 24))} min`
-  }));
-
-  const hotZones = rankedZones.slice(0, 3).map((zone) => ({
-    ...zone,
-    heat: getZoneHeat(zone),
-    nudgeDrivers: Math.max(1, Math.ceil(Math.max(0, zone.demandLevel - zone.supplyLevel) / 2))
-  }));
-  const focusedZoneHeat = focusedZone ? getZoneHeat(focusedZone) : null;
+  async function createCourier() {
+    setCreatingCourier(true);
+    try {
+      await adminRequest("/admin/riders", {
+        method: "POST",
+        body: JSON.stringify(createCourierForm)
+      });
+      setCreateCourierForm(emptyCourierForm);
+      setShowCreateCourier(false);
+      await refreshAll();
+    } finally {
+      setCreatingCourier(false);
+    }
+  }
 
   if (!ready) return <LoadingCard />;
-  if (!session) return <AuthRequiredCard message="Sign in with an admin account to manage riders." />;
+  if (!session) return <AuthRequiredCard message="Sign in with an admin account to manage couriers." />;
   if (!hasAdminAccess(session, "riders")) {
-    return <AccessDeniedCard message="Your manager role does not have access to the rider workspace." />;
+    return <AccessDeniedCard message="Your manager role does not have access to courier management." />;
   }
-  if (query.loading) return <LoadingCard label="Loading riders..." />;
-  if (query.error) return <ErrorCard message={query.error} />;
+  if (fleetQuery.loading || opsQuery.loading || restaurantsQuery.loading) {
+    return <LoadingCard label="Loading courier operations..." />;
+  }
+  if (fleetQuery.error) return <ErrorCard message={fleetQuery.error} />;
+  if (opsQuery.error) return <ErrorCard message={opsQuery.error} />;
+  if (restaurantsQuery.error) return <ErrorCard message={restaurantsQuery.error} />;
 
   return (
     <DashboardShell
-      title="Rider managers"
-      description="Run live fleet operations, monitor demand pressure, and move riders where BiteHub needs them most."
+      title="Courier management"
+      description="Manage your fleet, review courier leads, monitor riders in Ghana in real time, and keep operations moving."
       session={session}
     >
-      <section className="overflow-hidden rounded-[32px] border border-slate-800 bg-[#08111f] shadow-[0_32px_90px_rgba(2,6,23,0.45)]">
-        <div className="border-b border-slate-800 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(249,115,22,0.12),_transparent_24%),linear-gradient(180deg,#101827_0%,#09111d_100%)] px-6 py-5">
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-emerald-300/80">Delivery Ops Center</p>
-              <h2 className="mt-2 text-3xl font-semibold text-white">Fleet dashboard</h2>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <label className="flex min-w-[280px] items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900/70 px-4 py-3 text-slate-400">
-                <Search className="h-4 w-4" />
-                <input
-                  type="text"
-                  placeholder="Smart Search"
-                  className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-500"
-                />
-              </label>
-
-              <div className={`rounded-2xl border px-4 py-3 text-sm ${focusedZoneHeat?.panel ?? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"}`}>
-                <p className="font-semibold">Dynamic surge slider</p>
-                <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-200/80">
-                  Active @ {focusedZone ? `${(focusedZone.demandLevel / 10 + 1).toFixed(1)}` : "1.2"}x {focusedZone?.zoneLabel ?? "dispatch zone"}
-                </p>
+      <section className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+          {[
+            { label: "Fleet couriers", value: fleet?.summary.courierCount ?? 0, icon: Users },
+            { label: "Online & available", value: fleet?.summary.availableCouriers ?? 0, icon: Radio },
+            { label: "On trip", value: fleet?.summary.onTripCouriers ?? 0, icon: Bike },
+            { label: "Finished orders", value: fleet?.summary.finishedOrders ?? 0, icon: Sparkles },
+            { label: "Fleet income", value: formatMoney(fleet?.summary.fleetIncome ?? 0), icon: BadgeDollarSign }
+          ].map((card) => (
+            <article
+              key={card.label}
+              className="rounded-3xl border border-slate-800 bg-slate-950/80 p-5 shadow-[0_24px_50px_rgba(2,6,23,0.32)]"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">{card.label}</p>
+                <card.icon className="h-4 w-4 text-orange-300" />
               </div>
-            </div>
-          </div>
+              <p className="mt-4 text-3xl font-semibold text-white">{card.value}</p>
+            </article>
+          ))}
         </div>
 
-        <div className="grid gap-px bg-slate-800 xl:grid-cols-[1.02fr_0.98fr] 2xl:grid-cols-[1.02fr_1.08fr_0.7fr]">
-          <section className="bg-[#0b1424] p-5">
-            <div className="grid gap-3 sm:grid-cols-2">
-              {[
-                { label: "Live orders", value: liveOrders, icon: Radio, accent: "from-emerald-400/20 to-emerald-500/5" },
-                { label: "Active drivers", value: activeDrivers, icon: Bike, accent: "from-sky-400/20 to-sky-500/5" },
-                { label: "Pending pickups", value: pendingPickups, icon: Clock3, accent: "from-amber-400/20 to-amber-500/5" },
-                { label: "Avg delivery time", value: `${averageDeliveryMinutes} min`, icon: Flame, accent: "from-orange-400/20 to-orange-500/5" }
-              ].map((card) => (
-                <article
-                  key={card.label}
-                  className={`rounded-2xl border border-slate-700 bg-gradient-to-br ${card.accent} p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]`}
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">{card.label}</p>
-                    <card.icon className="h-4 w-4 text-slate-300" />
-                  </div>
-                  <p className="mt-3 text-3xl font-semibold text-white">{card.value}</p>
-                </article>
-              ))}
+        <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
+          <article className="rounded-[32px] border border-slate-800 bg-[#07101d] p-5 shadow-[0_28px_70px_rgba(2,6,23,0.4)]">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Real-time monitoring</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Live Ghana courier map</h2>
+                <p className="mt-2 text-sm text-slate-400">
+                  Online riders refresh every 10 seconds. Green riders are available, violet riders are already on a trip.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-700 bg-slate-900/80 px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-300">
+                {fleet?.liveRoutes.length ?? 0} live couriers
+              </div>
             </div>
 
-            <article className="mt-5 rounded-[26px] border border-slate-700 bg-[#0f1a2d] p-4">
+            <div className="mt-5 rounded-[28px] border border-slate-700 bg-slate-950/60 p-4">
+              <GhanaDispatchMap
+                zones={heatmap}
+                activeRiders={couriers
+                  .filter((courier) => courier.isOnline && typeof courier.currentLatitude === "number" && typeof courier.currentLongitude === "number")
+                  .map((courier) => ({
+                    id: courier.id,
+                    isOnline: courier.isOnline,
+                    vehicleType: courier.vehicleType,
+                    currentLatitude: courier.currentLatitude as number,
+                    currentLongitude: courier.currentLongitude as number,
+                    user: {
+                      firstName: courier.name.split(" ")[0] ?? courier.name,
+                      lastName: courier.name.split(" ").slice(1).join(" ")
+                    },
+                    activeDelivery:
+                      courier.metrics.activeTrips > 0
+                        ? {
+                            id: courier.recentTrips[0]?.id ?? courier.id,
+                            status: courier.recentTrips[0]?.status ?? "IN_TRANSIT",
+                            orderId: courier.recentTrips[0]?.id ?? courier.id,
+                            restaurantName: courier.recentTrips[0]?.restaurantName ?? null
+                          }
+                        : null
+                  }))}
+                restaurants={restaurants}
+                focusedZoneId={selectedZoneId}
+                focusedRiderId={selectedCourier?.id ?? null}
+                focusedRestaurantId={null}
+                onZoneSelect={setSelectedZoneId}
+                onRiderSelect={setSelectedCourierId}
+              />
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-3">
+              {(fleet?.liveRoutes ?? []).slice(0, 3).map((route) => (
+                <div key={route.riderId} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-4">
+                  <p className="text-sm font-semibold text-white">{route.riderName}</p>
+                  <p className="mt-1 text-xs uppercase tracking-[0.16em] text-slate-500">
+                    {route.activity?.status?.replaceAll("_", " ") ?? "Idle courier"}
+                  </p>
+                  <p className="mt-3 text-sm text-slate-300">{route.activity?.restaurantName ?? "Waiting near a demand zone"}</p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    {route.activity?.deliveryAddress ?? route.activity?.pickupAddress ?? "No route history yet."}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <aside className="space-y-6">
+            <article className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Live order feed</p>
-                  <p className="mt-1 text-sm text-slate-500">Real BiteHub orders currently moving through dispatch.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Courier leads</p>
+                  <h3 className="mt-2 text-xl font-semibold text-white">Applications waiting for review</h3>
                 </div>
-                <div className="rounded-2xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-xs font-semibold text-slate-300">
-                  {feedRows.length} queued rows
-                </div>
+                <span className="rounded-full bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-200">
+                  {leads.length} pending
+                </span>
               </div>
-
-              <div className="mt-4 overflow-hidden rounded-2xl border border-slate-800">
-                <div className="grid grid-cols-[0.9fr_1.1fr_0.8fr_1.1fr_1fr_0.85fr_0.75fr] gap-3 bg-slate-900/90 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">
-                  <span>ID</span>
-                  <span>Customer</span>
-                  <span>Items</span>
-                  <span>Restaurant</span>
-                  <span>Driver</span>
-                  <span>Status</span>
-                  <span>ETA</span>
-                </div>
-
-                <div className="max-h-[430px] overflow-y-auto bg-[#0c1526]">
-                  {feedRows.length ? (
-                    feedRows.map((row, index) => (
-                      <div
-                        key={row.id}
-                        className={`grid grid-cols-[0.9fr_1.1fr_0.8fr_1.1fr_1fr_0.85fr_0.75fr] gap-3 px-4 py-3 text-[13px] text-slate-200 ${
-                          index % 2 === 0 ? "bg-white/[0.015]" : "bg-transparent"
-                        }`}
-                      >
-                        <span className="font-medium text-sky-300">{row.orderCode}</span>
-                        <span>{row.customer}</span>
-                        <span className="text-slate-400">{row.items}</span>
-                        <span>{row.restaurant}</span>
-                        <span className="truncate text-slate-300">{row.driver}</span>
-                        <span>
-                          <span className="inline-flex rounded-full bg-orange-400/15 px-2.5 py-1 text-[11px] font-semibold text-orange-200">
-                            {row.status}
-                          </span>
-                        </span>
-                        <span className="text-slate-300">{row.eta}</span>
+              <div className="mt-5 space-y-3">
+                {leads.length ? (
+                  leads.map((lead) => (
+                    <div key={lead.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                      <p className="text-sm font-semibold text-white">{lead.name}</p>
+                      <p className="mt-1 text-sm text-slate-400">{lead.email}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-500">
+                        {lead.vehicleType || "Vehicle pending"} · {formatDate(lead.createdAt)}
+                      </p>
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          disabled={leadActionLoading === `${lead.id}-APPROVED`}
+                          onClick={() => void reviewLead(lead.id, "APPROVED")}
+                          className="rounded-2xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
+                        >
+                          Approve
+                        </button>
+                        <button
+                          type="button"
+                          disabled={leadActionLoading === `${lead.id}-REJECTED`}
+                          onClick={() => void reviewLead(lead.id, "REJECTED")}
+                          className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
+                        >
+                          Reject
+                        </button>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-4">
-                      <EmptyCard message="No live dispatch orders yet." />
                     </div>
-                  )}
-                </div>
+                  ))
+                ) : (
+                  <EmptyCard message="No courier applications are waiting right now." />
+                )}
               </div>
             </article>
-          </section>
 
-          <section className="relative overflow-hidden bg-[#07101d] p-5 2xl:border-l 2xl:border-slate-800">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(244,63,94,0.14),transparent_24%),radial-gradient(circle_at_80%_30%,rgba(249,115,22,0.12),transparent_18%),radial-gradient(circle_at_60%_75%,rgba(56,189,248,0.08),transparent_20%)]" />
-            <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:48px_48px]" />
-
-            <div className="relative h-full min-h-[540px] rounded-[28px] border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.65),rgba(2,6,23,0.85))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] xl:min-h-[600px] 2xl:min-h-[720px]">
-              <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] [background-size:48px_48px]" />
-
-              <div className="relative flex items-center justify-between">
+            <article className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Fleet map</p>
-                  <h3 className="mt-1 text-xl font-semibold text-white">Ghana dispatch pressure map</h3>
-                  <p className="mt-2 text-sm text-slate-400">Demand hotspots are projected onto Ghana dispatch zones so ops can nudge riders toward real pressure areas.</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Campaigns</p>
+                  <h3 className="mt-2 text-xl font-semibold text-white">Active rider promotions</h3>
                 </div>
-                <div className={`rounded-2xl border px-3 py-2 text-sm text-slate-200 ${focusedZoneHeat?.panel ?? "border-slate-700 bg-slate-900/70"}`}>
-                  {focusedZone ? focusedZone.zoneLabel : "No active zone"}
+                <Sparkles className="h-5 w-5 text-orange-300" />
+              </div>
+              <div className="mt-5 space-y-3">
+                {fleet?.campaigns.length ? (
+                  fleet.campaigns.slice(0, 5).map((campaign) => (
+                    <div key={campaign.id} className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-white">{campaign.title}</p>
+                        <span className="rounded-full bg-orange-500/15 px-2.5 py-1 text-xs font-semibold text-orange-200">
+                          {formatMoney(campaign.bonusAmount)}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-400">{campaign.description}</p>
+                      <p className="mt-3 text-xs uppercase tracking-[0.18em] text-slate-500">
+                        {campaign.zoneLabel || "All zones"} · {campaign.riderName}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <EmptyCard message="No active rider campaigns yet." />
+                )}
+              </div>
+            </article>
+          </aside>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+          <article className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Courier list</p>
+                <h3 className="mt-2 text-xl font-semibold text-white">View, edit, and block fleet profiles</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreateCourier((value) => !value)}
+                className="inline-flex items-center gap-2 rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-400"
+              >
+                <UserPlus className="h-4 w-4" />
+                Add courier
+              </button>
+            </div>
+
+            {showCreateCourier ? (
+              <div className="mt-5 grid gap-3 rounded-3xl border border-slate-800 bg-slate-900/70 p-4 md:grid-cols-2">
+                {[
+                  { key: "firstName", label: "First name" },
+                  { key: "lastName", label: "Last name" },
+                  { key: "email", label: "Email" },
+                  { key: "phone", label: "Phone" },
+                  { key: "password", label: "Password" },
+                  { key: "vehicleType", label: "Vehicle type" }
+                ].map((field) => (
+                  <label key={field.key} className="space-y-2 text-sm text-slate-300">
+                    <span>{field.label}</span>
+                    <input
+                      type={field.key === "password" ? "password" : "text"}
+                      value={(createCourierForm as Record<string, string>)[field.key]}
+                      onChange={(event) =>
+                        setCreateCourierForm((current) => ({ ...current, [field.key]: event.target.value }))
+                      }
+                      className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
+                    />
+                  </label>
+                ))}
+                <div className="flex gap-3 md:col-span-2">
+                  <button
+                    type="button"
+                    disabled={creatingCourier}
+                    onClick={() => void createCourier()}
+                    className="rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400 disabled:opacity-60"
+                  >
+                    Create courier
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateCourier(false)}
+                    className="rounded-2xl border border-slate-700 px-4 py-3 text-sm font-semibold text-slate-300 transition hover:border-slate-500"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
+            ) : null}
 
-              <GhanaDispatchMap
-                zones={rankedZones.slice(0, 8)}
-                activeRiders={liveRidersData}
-                restaurants={restaurants}
-                focusedZoneId={focusedZone?.id ?? null}
-                focusedRiderId={selectedRiderId}
-                focusedRestaurantId={focusedRestaurant?.id ?? null}
-                onZoneSelect={(zoneId) => {
-                  setSelectedZoneId(zoneId);
-                  setSelectedRestaurantId(null);
-                }}
-                onRiderSelect={(riderId) => setSelectedRiderId(riderId)}
-                onRestaurantSelect={(restaurantId) => setSelectedRestaurantId(restaurantId)}
-              />
-
-              <div className="relative mt-6 grid gap-3 md:grid-cols-3">
-                {hotZones.map((zone) => (
+            <div className="mt-5 overflow-hidden rounded-3xl border border-slate-800">
+              <div className="grid grid-cols-[1.2fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 bg-slate-900 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <span>Courier</span>
+                <span>Vehicle</span>
+                <span>Status</span>
+                <span>Finished</span>
+                <span>Acceptance</span>
+                <span>Earnings</span>
+              </div>
+              <div className="max-h-[460px] overflow-y-auto bg-slate-950/60">
+                {couriers.map((courier, index) => (
                   <button
-                    key={zone.id}
+                    key={courier.id}
                     type="button"
-                    onClick={() => setSelectedZoneId(zone.id)}
-                    className={`rounded-2xl border px-4 py-3 text-left transition hover:border-white/25 ${zone.heat.panel} ${
-                      zone.id === focusedZone?.id ? "ring-2 ring-white/30" : ""
+                    onClick={() => setSelectedCourierId(courier.id)}
+                    className={`grid w-full grid-cols-[1.2fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 px-4 py-4 text-left text-sm transition ${
+                      selectedCourier?.id === courier.id ? "bg-orange-500/10" : index % 2 === 0 ? "bg-white/[0.015]" : ""
                     }`}
                   >
-                    <p className="text-sm font-semibold text-white">{zone.zoneLabel}</p>
-                    <p className="mt-1 text-xs text-slate-300">
-                      Demand {zone.demandLevel}/10 · Supply {zone.supplyLevel}/10
-                    </p>
-                    <div className="mt-3 flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white">
-                        {zone.activeOrders} active deliveries
-                      </p>
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${zone.heat.chip}`}>
-                        {zone.heat.label}
+                    <span>
+                      <span className="block font-semibold text-white">{courier.name}</span>
+                      <span className="block text-xs text-slate-500">{courier.email}</span>
+                    </span>
+                    <span className="text-slate-300">{courier.vehicleType}</span>
+                    <span>
+                      <span className={`inline-flex rounded-full border px-2.5 py-1 text-[11px] font-semibold ${getStatusTone(courier)}`}>
+                        {getStatusLabel(courier)}
                       </span>
-                    </div>
+                    </span>
+                    <span className="text-slate-300">{courier.metrics.finishedOrders}</span>
+                    <span className="text-slate-300">{courier.metrics.acceptanceRate}%</span>
+                    <span className="text-slate-200">{formatMoney(courier.metrics.earnings)}</span>
                   </button>
                 ))}
               </div>
             </div>
-          </section>
+          </article>
 
-          <aside className="bg-[#0a1220] p-5 xl:col-span-2 2xl:col-span-1 2xl:border-l 2xl:border-slate-800">
-            <div className="rounded-[26px] border border-slate-700 bg-[#0f1829] p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Action panel</p>
-                  <h3 className="mt-1 text-lg font-semibold text-white">Focused dispatch lane</h3>
-                </div>
-                <Siren className="h-5 w-5 text-orange-300" />
+          <aside className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Courier profile</p>
+                <h3 className="mt-2 text-xl font-semibold text-white">{selectedCourier?.name ?? "Select a courier"}</h3>
               </div>
-
-              <div className="mt-5 rounded-2xl border border-slate-700 bg-slate-950/50 p-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-400/15 text-emerald-300">
-                    <MapPinned className="h-5 w-5" />
+              {selectedCourier ? (
+                <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusTone(selectedCourier)}`}>
+                  {getStatusLabel(selectedCourier)}
+                </span>
+              ) : null}
+            </div>
+            {selectedCourier ? (
+              <div className="mt-5 space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  {[
+                    { key: "firstName", label: "First name" },
+                    { key: "lastName", label: "Last name" },
+                    { key: "phone", label: "Phone" },
+                    { key: "vehicleType", label: "Vehicle type" }
+                  ].map((field) => (
+                    <label key={field.key} className="space-y-2 text-sm text-slate-300">
+                      <span>{field.label}</span>
+                      <input
+                        value={(editCourierForm as Record<string, string | boolean>)[field.key] as string}
+                        onChange={(event) =>
+                          setEditCourierForm((current) => ({ ...current, [field.key]: event.target.value }))
+                        }
+                        className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-300">
+                    <span>Allow rider online</span>
+                    <input
+                      type="checkbox"
+                      checked={editCourierForm.isOnline}
+                      onChange={(event) =>
+                        setEditCourierForm((current) => ({ ...current, isOnline: event.target.checked }))
+                      }
+                    />
+                  </label>
+                  <label className="flex items-center justify-between rounded-2xl border border-slate-800 bg-slate-900/60 px-4 py-3 text-sm text-slate-300">
+                    <span>Account active</span>
+                    <input
+                      type="checkbox"
+                      checked={editCourierForm.isActive}
+                      onChange={(event) =>
+                        setEditCourierForm((current) => ({ ...current, isActive: event.target.checked }))
+                      }
+                    />
+                  </label>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Finished</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{selectedCourier.metrics.finishedOrders}</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-semibold text-white">{focusedZone?.zoneLabel ?? "Awaiting zone data"}</p>
-                    <p className="text-xs text-slate-400">
-                      {focusedZone ? `${feedRows.length} live orders in focus` : "No hot zone selected"}
-                    </p>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Online hours</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{selectedCourier.metrics.onlineHours}</p>
                   </div>
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+                    <p className="text-xs uppercase tracking-[0.18em] text-slate-500">Quality score</p>
+                    <p className="mt-2 text-2xl font-semibold text-white">{selectedCourier.metrics.qualityScore ?? "N/A"}</p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    disabled={savingCourier}
+                    onClick={() => void saveCourierChanges()}
+                    className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-400 disabled:opacity-60"
+                  >
+                    Save courier changes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditCourierForm((current) => ({ ...current, isActive: !current.isActive }))}
+                    className="inline-flex items-center gap-2 rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20"
+                  >
+                    <ShieldBan className="h-4 w-4" />
+                    {editCourierForm.isActive ? "Block courier" : "Unblock courier"}
+                  </button>
                 </div>
               </div>
+            ) : (
+              <EmptyCard message="Select a courier from the fleet list to edit the profile." />
+            )}
+          </aside>
+        </div>
 
-              <div className="mt-4 space-y-3">
-                <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Pre-rush nudge</p>
-                  {focusedZone ? (
-                    <>
-                      <p className="mt-3 text-lg font-semibold text-white">
-                        Move {hotZones[0]?.nudgeDrivers ?? 1} rider{(hotZones[0]?.nudgeDrivers ?? 1) === 1 ? "" : "s"} toward {focusedZone.zoneLabel}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-slate-400">
-                        Demand is outpacing available supply here. Push nearby drivers into this red zone before the rush starts.
-                      </p>
-                      <div className="mt-3 inline-flex rounded-full bg-rose-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-rose-200">
-                        Highest demand zone
-                      </div>
-                    </>
-                  ) : (
-                    <p className="mt-3 text-sm text-slate-400">No demand hotspot is active yet.</p>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Assigned rider</p>
-                  <div className="mt-3 flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-800 text-slate-300">
-                      <UserRound className="h-5 w-5" />
+        <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+          <article className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Trip history</p>
+                <h3 className="mt-2 text-xl font-semibold text-white">Analyze past rider activity by name</h3>
+              </div>
+              <label className="flex min-w-[280px] items-center gap-3 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-slate-400">
+                <Search className="h-4 w-4" />
+                <input
+                  type="text"
+                  value={tripSearch}
+                  onChange={(event) => setTripSearch(event.target.value)}
+                  placeholder="Search driver, restaurant, customer, route..."
+                  className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600"
+                />
+              </label>
+            </div>
+            <div className="mt-5 overflow-hidden rounded-3xl border border-slate-800">
+              <div className="grid grid-cols-[0.9fr_1fr_1fr_1.25fr_1.25fr_0.8fr_0.7fr_0.75fr] gap-3 bg-slate-900 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <span>Driver</span><span>Restaurant</span><span>Customer</span><span>Pickup</span><span>Dropoff</span><span>Status</span><span>Distance</span><span>Price</span>
+              </div>
+              <div className="max-h-[500px] overflow-y-auto bg-slate-950/60">
+                {filteredTrips.length ? (
+                  filteredTrips.map((trip, index) => (
+                    <div
+                      key={trip.id}
+                      className={`grid grid-cols-[0.9fr_1fr_1fr_1.25fr_1.25fr_0.8fr_0.7fr_0.75fr] gap-3 px-4 py-4 text-sm ${index % 2 === 0 ? "bg-white/[0.015]" : ""}`}
+                    >
+                      <span className="text-white">{trip.riderName ?? "Rider"}</span>
+                      <span className="text-slate-300">{trip.restaurantName}</span>
+                      <span className="text-slate-300">{trip.customerName}</span>
+                      <span className="text-slate-500">{trip.pickupAddress}</span>
+                      <span className="text-slate-500">{trip.deliveryAddress}</span>
+                      <span className="text-slate-300">{trip.status.replaceAll("_", " ")}</span>
+                      <span className="text-slate-300">{trip.distanceKm ? `${trip.distanceKm} km` : "N/A"}</span>
+                      <span className="text-slate-200">{formatMoney(trip.price)}</span>
                     </div>
-                    <div>
-                      <p className="text-sm font-semibold text-white">
-                        {selectedLiveRider?.user
-                          ? formatRiderName(selectedLiveRider.user)
-                          : focusedOrder?.delivery?.riderProfile?.user
-                          ? formatRiderName(focusedOrder.delivery.riderProfile.user)
-                          : nearbyRiders[0]?.user
-                            ? formatRiderName(nearbyRiders[0].user)
-                            : focusedQualitySignal
-                              ? formatRiderName(focusedQualitySignal.riderProfile?.user)
-                              : "Dispatch pool"}
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        {selectedLiveRider
-                          ? selectedLiveRider.activeDelivery?.restaurantName
-                            ? `On delivery for ${selectedLiveRider.activeDelivery.restaurantName}`
-                            : "Available for assignment"
-                          : focusedOrder?.delivery?.riderProfile?.user
-                          ? "Currently assigned to focused order"
-                          : nearbyRiders[0]
-                            ? `${nearbyRiders[0].restaurantDistanceKm} km from restaurant`
-                            : focusedQualitySignal?.scoreType ?? "Quality signal pending"}
-                      </p>
-                    </div>
+                  ))
+                ) : (
+                  <div className="p-4">
+                    <EmptyCard message="No trip history matches your current search." />
                   </div>
-                </div>
-
-                <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Focused order</p>
-                  <p className="mt-3 text-lg font-semibold text-white">{focusedRestaurant?.name ?? focusedOrder?.restaurant?.name ?? "No active order selected"}</p>
-                  <p className="mt-1 text-sm text-slate-400">
-                    {focusedOrder ? `${formatCustomerName(focusedOrder.customer)} · ${focusedOrder.status.replaceAll("_", " ")}` : "Waiting for live order activity"}
-                  </p>
-                  <p className="mt-3 text-sm text-emerald-300">
-                    {focusedOrder ? `ETA ${Math.max(10, Number(focusedOrder.etaPredictions?.[0]?.minutesAway ?? 24))} min` : "Stable rider confidence"}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Pending approvals</p>
-                  <div className="mt-3 space-y-2">
-                    {pendingRiders.length ? (
-                      pendingRiders.slice(0, 3).map((rider) => (
-                        <div key={rider.id} className="rounded-2xl bg-white/[0.03] p-3">
-                          <p className="text-sm font-semibold text-white">{formatRiderName(rider.user)}</p>
-                          <p className="mt-1 text-xs text-slate-400">
-                            {rider.user?.email ?? "No email"} · {rider.vehicleType ?? "Vehicle type pending"}
-                          </p>
-                          <button
-                            type="button"
-                            onClick={() => void approveRider(rider.id)}
-                            className="mt-3 inline-flex rounded-xl bg-emerald-500 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-400"
-                          >
-                            Approve rider
-                          </button>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-2xl bg-white/[0.03] p-3 text-sm text-slate-400">No riders awaiting approval.</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:border-emerald-400/50 hover:bg-slate-800"
-                  >
-                    <ShieldCheck className="h-4 w-4" />
-                    Manual re-dispatch
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-orange-500/40 bg-orange-500/10 px-4 py-3 text-sm font-semibold text-orange-200 transition hover:bg-orange-500/20"
-                  >
-                    <Siren className="h-4 w-4" />
-                    Flag issue
-                  </button>
-                  <button
-                    type="button"
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-sky-500/35 bg-sky-500/10 px-4 py-3 text-sm font-semibold text-sky-200 transition hover:bg-sky-500/20"
-                  >
-                    <Radio className="h-4 w-4" />
-                    Send driver message
-                  </button>
-                </div>
+                )}
               </div>
             </div>
+          </article>
+
+          <aside className="space-y-6">
+            <article className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Financials & reports</p>
+                  <h3 className="mt-2 text-xl font-semibold text-white">Fleet earnings overview</h3>
+                </div>
+                <CreditCard className="h-5 w-5 text-orange-300" />
+              </div>
+              <div className="mt-5 grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Cashless trips</p><p className="mt-2 text-2xl font-semibold text-white">{fleet?.financials.cashlessTrips ?? 0}</p></div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Cash trips</p><p className="mt-2 text-2xl font-semibold text-white">{fleet?.financials.cashTrips ?? 0}</p></div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Campaign bonuses</p><p className="mt-2 text-2xl font-semibold text-white">{formatMoney(fleet?.financials.bonusIncome ?? 0)}</p></div>
+                <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-4"><p className="text-xs uppercase tracking-[0.18em] text-slate-500">Payouts paid</p><p className="mt-2 text-2xl font-semibold text-white">{formatMoney(fleet?.financials.payoutRequests.paidAmount ?? 0)}</p></div>
+              </div>
+              <div className="mt-5 rounded-3xl border border-slate-800 bg-slate-900/70 p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-semibold text-white">Recent payout requests</p>
+                  <span className="text-xs uppercase tracking-[0.18em] text-slate-500">Pending {formatMoney(fleet?.financials.payoutRequests.pendingAmount ?? 0)}</span>
+                </div>
+                <div className="mt-4 space-y-3">
+                  {fleet?.financials.payoutRequests.recent.length ? (
+                    fleet.financials.payoutRequests.recent.slice(0, 6).map((request) => (
+                      <div key={request.id} className="rounded-2xl border border-slate-800 bg-slate-950/60 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-sm font-semibold text-white">{request.riderName}</p>
+                          <span className="rounded-full bg-sky-500/15 px-2.5 py-1 text-[11px] font-semibold text-sky-200">{request.status}</span>
+                        </div>
+                        <p className="mt-2 text-sm text-slate-400">{formatMoney(request.approvedAmount)}</p>
+                        <p className="mt-1 text-xs text-slate-500">{formatDate(request.createdAt)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <EmptyCard message="No payout requests yet." />
+                  )}
+                </div>
+              </div>
+            </article>
           </aside>
         </div>
       </section>

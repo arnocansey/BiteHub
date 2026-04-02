@@ -7,7 +7,10 @@ import { adminController } from "../controllers/admin.controller";
 import {
   adminSettingsSchema,
   adminCreateVendorSchema,
+  adminCreateRiderSchema,
   adminPromoteUserSchema,
+  adminReviewRiderSchema,
+  adminUpdateRiderSchema,
   assignRiderSchema,
   categorySchema,
   payoutRequestReviewSchema,
@@ -31,8 +34,12 @@ router.patch("/orders/:orderId/assign-rider", validate(assignRiderSchema), async
 router.get("/vendors/pending", asyncHandler(adminController.pendingVendors));
 router.patch("/vendors/:vendorId/approve", asyncHandler(adminController.approveVendor));
 router.get("/riders/pending", asyncHandler(adminController.pendingRiders));
+router.get("/riders/fleet", asyncHandler(adminController.ridersFleet));
+router.post("/riders", validate(adminCreateRiderSchema), asyncHandler(adminController.createRider));
 router.get("/riders/live", asyncHandler(adminController.liveRiders));
 router.patch("/riders/:riderId/approve", asyncHandler(adminController.approveRider));
+router.patch("/riders/:riderId/review", validate(adminReviewRiderSchema), asyncHandler(adminController.reviewRider));
+router.patch("/riders/:riderId", validate(adminUpdateRiderSchema), asyncHandler(adminController.updateRider));
 router.get("/categories", asyncHandler(adminController.categories));
 router.get("/restaurants", asyncHandler(adminController.restaurantsCatalog));
 router.patch("/restaurants/:restaurantId/status", validate(restaurantStatusSchema), asyncHandler(adminController.updateRestaurantStatus));

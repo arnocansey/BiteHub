@@ -1,0 +1,35 @@
+{
+  "cli": {
+    "version": ">= 10.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "autoIncrement": true
+    },
+    "customer-production": {
+      "extends": "production",
+      "channel": "customer-production",
+      "env": {
+        "EXPO_PUBLIC_APP_VARIANT": "customer",
+        "EXPO_PUBLIC_API_BASE_URL": "https://bitehub-backend.up.railway.app/api/v1"
+      }
+    },
+    "customer-installable": {
+      "extends": "customer-production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}

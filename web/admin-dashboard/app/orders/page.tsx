@@ -37,7 +37,7 @@ export default function OrdersPage() {
     if (activeFilter === "unassigned") return orders.filter((order) => !order.delivery?.riderProfile);
     if (activeFilter === "active") {
       return orders.filter((order) =>
-        ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
+        ["ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
       );
     }
     return orders.filter((order) => order.status === "DELIVERED");

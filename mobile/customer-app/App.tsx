@@ -39,6 +39,7 @@ type PrivateDataBundle = {
   notificationData: any[];
 };
 const sessionStorageKey = "bitehub_customer_session";
+const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -52,6 +53,10 @@ const queryClient = new QueryClient({
 function resolveApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (configured) return configured;
+
+  if (!__DEV__) {
+    return productionApiBaseUrl;
+  }
 
   const hostUri =
     (Constants as any)?.expoConfig?.hostUri ??

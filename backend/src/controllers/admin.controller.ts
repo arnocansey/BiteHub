@@ -327,6 +327,254 @@ async function buildSettlementPreview() {
   };
 }
 
+async function buildRiderFleetWorkspace() {
+  const [riders, pendingRiders, activeIncentives, payoutRequests] = await Promise.all([
+    prisma.riderProfile.findMany({
+      include: {
+        user: true,
+        deliveries: {
+          include: {
+            order: {
+              include: {
+                customer: true,
+                restaurant: true,
+                deliveryAddress: true,
+                payment: true,
+                settlement: true
+              }
+            }
+          },
+          orderBy: { deliveredAt: "desc" }
+        },
+        incentives: {
+          orderBy: { createdAt: "desc" }
+        },
+        qualityScores: {
+          orderBy: { measuredAt: "desc" }
+        }
+      },
+      orderBy: [{ isOnline: "desc" }, { approvalStatus: "asc" }, { updatedAt: "desc" }]
+    } as any),
+    prisma.riderProfile.findMany({
+      where: { approvalStatus: ApprovalStatus.PENDING },
+      include: { user: true },
+      orderBy: { user: { createdAt: "desc" } }
+    } as any),
+    prisma.riderIncentive.findMany({
+      where: { isActive: true },
+      include: {
+        riderProfile: {
+          include: { user: true }
+        }
+      },
+      orderBy: { startsAt: "asc" }
+    }),
+    payoutRequestDelegate.payoutRequest.findMany({
+      where: { targetType: PayoutRequestTarget.RIDER },
+      include: {
+        riderProfile: {
+          include: { user: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    })
+  ]);
+
+  const riderRows = riders.map((rider: any) => {
+    const deliveries = rider.deliveries ?? [];
+    const completedTrips = deliveries.filter((delivery: any) => delivery.status === DeliveryStatus.DELIVERED);
+    const activeTrips = deliveries.filter((delivery: any) =>
+      [DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT].includes(delivery.status)
+    );
+    const failedTrips = deliveries.filter((delivery: any) => delivery.status === DeliveryStatus.FAILED);
+    const paidTrips = completedTrips.filter((delivery: any) => delivery.order?.payment?.status === "PAID");
+    const cashTrips = paidTrips.filter((delivery: any) => delivery.order?.payment?.method === PaymentMethod.CASH);
+    const cashlessTrips = paidTrips.filter((delivery: any) => delivery.order?.payment?.method !== PaymentMethod.CASH);
+    const earnings = paidTrips.reduce(
+      (sum: number, delivery: any) => sum + Number(delivery.order?.settlement?.riderPayoutAmount ?? 0),
+      0
+    );
+    const bonuses = (rider.incentives ?? []).reduce((sum: number, incentive: any) => sum + Number(incentive.bonusAmount ?? 0), 0);
+    const firstActivityAt = deliveries
+      .map((delivery: any) => delivery.pickedUpAt ?? delivery.order?.placedAt ?? null)
+      .filter(Boolean)
+      .sort()[0];
+    const lastActivityAt = deliveries
+      .map((delivery: any) => delivery.deliveredAt ?? delivery.order?.placedAt ?? null)
+      .filter(Boolean)
+      .sort()
+      .slice(-1)[0];
+    const activityHours =
+      firstActivityAt && lastActivityAt
+        ? Number((((new Date(lastActivityAt).getTime() - new Date(firstActivityAt).getTime()) / 36e5) || 0).toFixed(1))
+        : 0;
+    const qualityScore = rider.qualityScores?.[0] ? Number(rider.qualityScores[0].scoreValue ?? 0) : null;
+    const completionRate = deliveries.length ? Math.round((completedTrips.length / deliveries.length) * 100) : 0;
+    const acceptanceRate = deliveries.length ? Math.round(((deliveries.length - failedTrips.length) / deliveries.length) * 100) : 0;
+
+    return {
+      id: rider.id,
+      userId: rider.userId,
+      name: `${rider.user?.firstName ?? ""} ${rider.user?.lastName ?? ""}`.trim() || "Rider",
+      email: rider.user?.email ?? "",
+      phone: rider.user?.phone ?? "",
+      vehicleType: rider.vehicleType ?? "Not set",
+      approvalStatus: rider.approvalStatus,
+      isOnline: rider.isOnline,
+      isActive: rider.user?.isActive ?? true,
+      currentLatitude: rider.currentLatitude,
+      currentLongitude: rider.currentLongitude,
+      metrics: {
+        finishedOrders: completedTrips.length,
+        activeTrips: activeTrips.length,
+        failedTrips: failedTrips.length,
+        completionRate,
+        acceptanceRate,
+        onlineHours: activityHours,
+        earnings: Number(earnings.toFixed(2)),
+        bonuses: Number(bonuses.toFixed(2)),
+        cashTrips: cashTrips.length,
+        cashlessTrips: cashlessTrips.length,
+        qualityScore
+      },
+      recentTrips: deliveries.slice(0, 10).map((delivery: any) => ({
+        id: delivery.id,
+        orderId: delivery.orderId,
+        status: delivery.status,
+        customerName: `${delivery.order?.customer?.firstName ?? ""} ${delivery.order?.customer?.lastName ?? ""}`.trim() || "Customer",
+        pickupAddress: delivery.order?.restaurant?.address ?? "Restaurant address unavailable",
+        deliveryAddress: delivery.order?.deliveryAddress?.fullAddress ?? "Delivery address unavailable",
+        restaurantName: delivery.order?.restaurant?.name ?? "Restaurant",
+        paymentMethod: delivery.order?.payment?.method ?? null,
+        price: Number(delivery.order?.totalAmount ?? 0),
+        riderPayout: Number(delivery.order?.settlement?.riderPayoutAmount ?? 0),
+        placedAt: delivery.order?.placedAt,
+        deliveredAt: delivery.deliveredAt,
+        pickupEtaMins: delivery.pickupEtaMins,
+        deliveryEtaMins: delivery.deliveryEtaMins,
+        distanceKm:
+          typeof delivery.order?.restaurant?.latitude === "number" &&
+          typeof delivery.order?.restaurant?.longitude === "number" &&
+          typeof delivery.order?.deliveryAddress?.latitude === "number" &&
+          typeof delivery.order?.deliveryAddress?.longitude === "number"
+            ? Number(
+                distanceInKm(
+                  delivery.order.restaurant.latitude,
+                  delivery.order.restaurant.longitude,
+                  delivery.order.deliveryAddress.latitude,
+                  delivery.order.deliveryAddress.longitude
+                ).toFixed(2)
+              )
+            : null
+      }))
+    };
+  });
+
+  const allTrips = riderRows
+    .flatMap((rider) =>
+      rider.recentTrips.map((trip: any) => ({
+        ...trip,
+        riderId: rider.id,
+        riderName: rider.name
+      }))
+    )
+    .sort((left, right) => new Date(right.placedAt ?? 0).getTime() - new Date(left.placedAt ?? 0).getTime());
+
+  const payoutSummary = payoutRequests.reduce(
+    (acc: any, request: any) => {
+      const amount = Number(request.approvedAmount ?? request.requestedAmount ?? 0);
+      if (request.status === PayoutRequestStatus.PENDING) acc.pendingAmount += amount;
+      if (request.status === PayoutRequestStatus.APPROVED) acc.approvedAmount += amount;
+      if (request.status === PayoutRequestStatus.PAID) acc.paidAmount += amount;
+      return acc;
+    },
+    { pendingAmount: 0, approvedAmount: 0, paidAmount: 0 }
+  );
+
+  const liveRoutes = riderRows
+    .filter((rider) => rider.isOnline && typeof rider.currentLatitude === "number" && typeof rider.currentLongitude === "number")
+    .map((rider) => ({
+      riderId: rider.id,
+      riderName: rider.name,
+      currentLatitude: rider.currentLatitude,
+      currentLongitude: rider.currentLongitude,
+      activity: rider.recentTrips[0]
+        ? {
+            restaurantName: rider.recentTrips[0].restaurantName,
+            pickupAddress: rider.recentTrips[0].pickupAddress,
+            deliveryAddress: rider.recentTrips[0].deliveryAddress,
+            status: rider.recentTrips[0].status
+          }
+        : null
+    }));
+
+  const fleetIncome = riderRows.reduce((sum, rider) => sum + rider.metrics.earnings, 0);
+  const bonusIncome = riderRows.reduce((sum, rider) => sum + rider.metrics.bonuses, 0);
+
+  return {
+    summary: {
+      courierCount: riderRows.length,
+      onlineCouriers: riderRows.filter((rider) => rider.isOnline).length,
+      availableCouriers: riderRows.filter((rider) => rider.isOnline && rider.metrics.activeTrips === 0).length,
+      onTripCouriers: riderRows.filter((rider) => rider.metrics.activeTrips > 0).length,
+      leadsCount: pendingRiders.length,
+      finishedOrders: riderRows.reduce((sum, rider) => sum + rider.metrics.finishedOrders, 0),
+      fleetIncome: Number(fleetIncome.toFixed(2)),
+      cashTrips: riderRows.reduce((sum, rider) => sum + rider.metrics.cashTrips, 0),
+      cashlessTrips: riderRows.reduce((sum, rider) => sum + rider.metrics.cashlessTrips, 0),
+      bonusIncome: Number(bonusIncome.toFixed(2)),
+      averageAcceptanceRate: riderRows.length
+        ? Math.round(riderRows.reduce((sum, rider) => sum + rider.metrics.acceptanceRate, 0) / riderRows.length)
+        : 0
+    },
+    couriers: riderRows,
+    courierLeads: pendingRiders.map((rider: any) => ({
+      id: rider.id,
+      name: `${rider.user?.firstName ?? ""} ${rider.user?.lastName ?? ""}`.trim() || "Rider applicant",
+      email: rider.user?.email ?? "",
+      phone: rider.user?.phone ?? "",
+      vehicleType: rider.vehicleType ?? "Not set",
+      createdAt: rider.user?.createdAt ?? null,
+      approvalStatus: rider.approvalStatus
+    })),
+    liveRoutes,
+    tripHistory: allTrips.slice(0, 50),
+    financials: {
+      totalFleetIncome: Number(fleetIncome.toFixed(2)),
+      cashTrips: riderRows.reduce((sum, rider) => sum + rider.metrics.cashTrips, 0),
+      cashlessTrips: riderRows.reduce((sum, rider) => sum + rider.metrics.cashlessTrips, 0),
+      bonusIncome: Number(bonusIncome.toFixed(2)),
+      tipsTracked: null,
+      payoutRequests: {
+        pendingAmount: Number(payoutSummary.pendingAmount.toFixed(2)),
+        approvedAmount: Number(payoutSummary.approvedAmount.toFixed(2)),
+        paidAmount: Number(payoutSummary.paidAmount.toFixed(2)),
+        recent: payoutRequests.slice(0, 12).map((request: any) => ({
+          id: request.id,
+          status: request.status,
+          requestedAmount: Number(request.requestedAmount),
+          approvedAmount: Number(request.approvedAmount ?? request.requestedAmount),
+          createdAt: request.createdAt,
+          paidAt: request.paidAt,
+          riderName:
+            `${request.riderProfile?.user?.firstName ?? ""} ${request.riderProfile?.user?.lastName ?? ""}`.trim() || "Rider"
+        }))
+      }
+    },
+    campaigns: activeIncentives.map((campaign) => ({
+      id: campaign.id,
+      title: campaign.title,
+      description: campaign.description,
+      zoneLabel: campaign.zoneLabel,
+      bonusAmount: Number(campaign.bonusAmount),
+      startsAt: campaign.startsAt,
+      endsAt: campaign.endsAt,
+      riderName:
+        `${campaign.riderProfile?.user?.firstName ?? ""} ${campaign.riderProfile?.user?.lastName ?? ""}`.trim() || "Assigned rider"
+    }))
+  };
+}
+
 export const adminController = {
   async overview(_req: Request, res: Response) {
     const [users, orders, restaurants] = await Promise.all([
@@ -482,6 +730,57 @@ export const adminController = {
       include: { user: true }
     });
     res.json(riders);
+  },
+
+  async ridersFleet(_req: Request, res: Response) {
+    const fleet = await buildRiderFleetWorkspace();
+    res.json(fleet);
+  },
+
+  async createRider(req: Request, res: Response) {
+    const { firstName, lastName, email, phone, password, vehicleType } = req.body as {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone?: string;
+      password: string;
+      vehicleType?: string;
+    };
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        OR: [{ email }, ...(phone ? [{ phone }] : [])]
+      }
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: "A user with this email or phone already exists." });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const rider = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        email,
+        phone,
+        passwordHash,
+        role: UserRole.RIDER,
+        riderProfile: {
+          create: {
+            vehicleType: vehicleType ?? null,
+            approvalStatus: ApprovalStatus.APPROVED
+          }
+        }
+      },
+      include: {
+        riderProfile: {
+          include: { user: true }
+        }
+      }
+    });
+
+    res.status(201).json(rider.riderProfile);
   },
 
   async liveRiders(_req: Request, res: Response) {
@@ -681,6 +980,80 @@ export const adminController = {
     });
 
     res.json(rider);
+  },
+
+  async reviewRider(req: Request, res: Response) {
+    const riderId = String(req.params.riderId);
+    const rider = await prisma.riderProfile.findUnique({
+      where: { id: riderId },
+      include: { user: true }
+    });
+
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found." });
+    }
+
+    const status = req.body.status as ApprovalStatus;
+    const updated = await prisma.riderProfile.update({
+      where: { id: riderId },
+      data: {
+        approvalStatus: status
+      },
+      include: { user: true }
+    });
+
+    await prisma.notification.create({
+      data: {
+        userId: rider.userId,
+        title: status === ApprovalStatus.APPROVED ? "Courier application approved" : "Courier application update",
+        body:
+          status === ApprovalStatus.APPROVED
+            ? "Your BiteHub courier application was approved. You can now sign in and go online."
+            : req.body.note ?? "Your BiteHub courier application was reviewed. Please contact support for more details.",
+        payload: {
+          type: "RIDER_APPLICATION_REVIEW",
+          status
+        }
+      }
+    });
+
+    res.json(updated);
+  },
+
+  async updateRider(req: Request, res: Response) {
+    const riderId = String(req.params.riderId);
+    const rider = await prisma.riderProfile.findUnique({
+      where: { id: riderId },
+      include: { user: true }
+    });
+
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found." });
+    }
+
+    const updated = await prisma.riderProfile.update({
+      where: { id: riderId },
+      data: {
+        vehicleType: req.body.vehicleType === undefined ? undefined : req.body.vehicleType,
+        isOnline: req.body.isOnline === undefined ? undefined : req.body.isOnline
+      },
+      include: { user: true }
+    });
+
+    const user = await prisma.user.update({
+      where: { id: rider.userId },
+      data: {
+        firstName: req.body.firstName === undefined ? undefined : req.body.firstName,
+        lastName: req.body.lastName === undefined ? undefined : req.body.lastName,
+        phone: req.body.phone === undefined ? undefined : req.body.phone,
+        isActive: req.body.isActive === undefined ? undefined : req.body.isActive
+      }
+    });
+
+    res.json({
+      ...updated,
+      user
+    });
   },
 
   async categories(_req: Request, res: Response) {

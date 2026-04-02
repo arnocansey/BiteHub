@@ -5,12 +5,17 @@
     "scheme": "bitehub-rider",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "light",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
+      "url": "https://u.expo.dev/603f8e3f-f1e0-4af4-8141-089631661998",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "icon": "./assets/bitehub-icon.png",
@@ -19,7 +24,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#040000"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.bitehub.rider",
       "buildNumber": "1.0.0",
@@ -30,15 +37,22 @@
     },
     "android": {
       "package": "com.bitehub.rider",
-      "versionCode": 1,
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "versionCode": 3,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/bitehub-icon.png",
         "backgroundColor": "#040000"
       }
     },
     "extra": {
-      "appVariant": "rider"
-    }
+      "appVariant": "rider",
+      "eas": {
+        "projectId": "603f8e3f-f1e0-4af4-8141-089631661998"
+      }
+    },
+    "owner": "whoisarnold"
   }
 }

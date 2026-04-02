@@ -163,6 +163,29 @@ export const adminCreateVendorSchema = z.object({
   businessName: z.string().min(2).max(120)
 });
 
+export const adminCreateRiderSchema = z.object({
+  firstName: z.string().min(2).max(80),
+  lastName: z.string().min(2).max(80),
+  email: z.string().email(),
+  phone: z.string().min(8).max(30).optional(),
+  password: z.string().min(8).max(120),
+  vehicleType: z.string().max(80).optional()
+});
+
+export const adminReviewRiderSchema = z.object({
+  status: z.enum(["APPROVED", "REJECTED"]),
+  note: z.string().max(240).optional()
+});
+
+export const adminUpdateRiderSchema = z.object({
+  firstName: z.string().min(2).max(80).optional(),
+  lastName: z.string().min(2).max(80).optional(),
+  phone: z.string().min(8).max(30).nullable().optional(),
+  vehicleType: z.string().max(80).nullable().optional(),
+  isOnline: z.boolean().optional(),
+  isActive: z.boolean().optional()
+});
+
 export const restaurantCollectionSchema = z.object({
   name: z.string().min(2).max(80),
   slug: z.string().min(2).max(80),

@@ -5,12 +5,17 @@
     "scheme": "bitehub-customer",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "light",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
+      "url": "https://u.expo.dev/fdbe03f1-263d-46c1-876f-fa871df9119f",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "icon": "./assets/bitehub-icon.png",
@@ -19,7 +24,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#040000"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.bitehub.customer",
       "buildNumber": "1.0.0",
@@ -30,15 +37,22 @@
     },
     "android": {
       "package": "com.bitehub.customer",
-      "versionCode": 1,
-      "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"],
+      "versionCode": 3,
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/bitehub-icon.png",
         "backgroundColor": "#040000"
       }
     },
     "extra": {
-      "appVariant": "customer"
-    }
+      "appVariant": "customer",
+      "eas": {
+        "projectId": "fdbe03f1-263d-46c1-876f-fa871df9119f"
+      }
+    },
+    "owner": "whoisarnold"
   }
 }

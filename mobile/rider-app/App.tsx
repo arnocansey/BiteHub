@@ -26,6 +26,7 @@ type RiderDataBundle = {
 };
 const sessionStorageKey = "bitehub_rider_session";
 const riderProfileImageStorageKey = "bitehub_rider_profile_image";
+const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -133,6 +134,10 @@ const generalTutorialSlides = [
 function resolveApiBaseUrl() {
   const configured = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
   if (configured) return configured;
+
+  if (!__DEV__) {
+    return productionApiBaseUrl;
+  }
 
   const hostUri =
     (Constants as any)?.expoConfig?.hostUri ??

@@ -1,16 +1,21 @@
 {
   "expo": {
     "name": "BiteHub Vendor",
-    "slug": "bitehub-vendor",
+    "slug": "bitehub-vendor-app",
     "scheme": "bitehub-vendor",
     "version": "1.0.0",
     "orientation": "portrait",
-    "platforms": ["ios", "android"],
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "userInterfaceStyle": "light",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
+      "url": "https://u.expo.dev/203d9e2d-7ddb-4149-8771-a20cc44c6613",
+      "checkAutomatically": "ON_LOAD",
       "fallbackToCacheTimeout": 0
     },
     "icon": "./assets/bitehub-icon.png",
@@ -19,7 +24,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#040000"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "com.bitehub.vendor",
       "buildNumber": "1.0.0",
@@ -27,14 +34,18 @@
     },
     "android": {
       "package": "com.bitehub.vendor",
-      "versionCode": 1,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/bitehub-icon.png",
         "backgroundColor": "#040000"
       }
     },
     "extra": {
-      "appVariant": "vendor"
-    }
+      "appVariant": "vendor",
+      "eas": {
+        "projectId": "203d9e2d-7ddb-4149-8771-a20cc44c6613"
+      }
+    },
+    "owner": "whoisarnold"
   }
 }
