@@ -353,12 +353,12 @@ async function buildRiderFleetWorkspace() {
           orderBy: { measuredAt: "desc" }
         }
       },
-      orderBy: [{ isOnline: "desc" }, { approvalStatus: "asc" }, { updatedAt: "desc" }]
+      orderBy: [{ isOnline: "desc" }, { approvalStatus: "asc" }, { id: "desc" }]
     } as any),
     prisma.riderProfile.findMany({
       where: { approvalStatus: ApprovalStatus.PENDING },
       include: { user: true },
-      orderBy: { user: { createdAt: "desc" } }
+      orderBy: { id: "desc" }
     } as any),
     prisma.riderIncentive.findMany({
       where: { isActive: true },
