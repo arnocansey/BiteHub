@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeDollarSign, Bike, CreditCard, Radio, Search, ShieldBan, Sparkles, UserPlus, Users } from "lucide-react";
 import { AccessDeniedCard, AuthRequiredCard, EmptyCard, ErrorCard, LoadingCard } from "../../components/admin-states";
 import { DashboardShell } from "../../components/dashboard-shell";
@@ -140,6 +140,7 @@ function getStatusLabel(courier: FleetCourier) {
 }
 
 export default function RidersPage() {
+  const profilePanelRef = useRef<HTMLDivElement | null>(null);
   const { session, ready } = useAdminSessionState();
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
@@ -197,7 +198,7 @@ export default function RidersPage() {
       isOnline: selectedCourier.isOnline,
       isActive: selectedCourier.isActive
     });
-  }, [selectedCourier?.id]);
+  }, [selectedCourier]);
 
   const filteredTrips = useMemo(() => {
     const trips = fleet?.tripHistory ?? [];
@@ -261,6 +262,14 @@ export default function RidersPage() {
     } finally {
       setCreatingCourier(false);
     }
+  }
+
+  function focusCourier(courierId: string) {
+    setSelectedCourierId(courierId);
+    setShowCreateCourier(false);
+    window.requestAnimationFrame(() => {
+      profilePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   if (!ready) return <LoadingCard />;
@@ -519,7 +528,8 @@ export default function RidersPage() {
                   <button
                     key={courier.id}
                     type="button"
-                    onClick={() => setSelectedCourierId(courier.id)}
+                    onClick={() => focusCourier(courier.id)}
+                    aria-pressed={selectedCourier?.id === courier.id}
                     className={`grid w-full grid-cols-[1.2fr_1.1fr_0.8fr_0.8fr_0.8fr_0.8fr] gap-3 px-4 py-4 text-left text-sm transition ${
                       selectedCourier?.id === courier.id ? "bg-orange-500/10" : index % 2 === 0 ? "bg-white/[0.015]" : ""
                     }`}
@@ -543,11 +553,12 @@ export default function RidersPage() {
             </div>
           </article>
 
-          <aside className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
+          <aside ref={profilePanelRef} className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Courier profile</p>
                 <h3 className="mt-2 text-xl font-semibold text-white">{selectedCourier?.name ?? "Select a courier"}</h3>
+                {selectedCourier ? <p className="mt-1 text-sm text-slate-500">Editing this courier updates the live fleet profile.</p> : null}
               </div>
               {selectedCourier ? (
                 <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${getStatusTone(selectedCourier)}`}>
@@ -556,22 +567,32 @@ export default function RidersPage() {
               ) : null}
             </div>
             {selectedCourier ? (
-              <div className="mt-5 space-y-4">
+              <div key={selectedCourier.id} className="mt-5 space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   {[
                     { key: "firstName", label: "First name" },
                     { key: "lastName", label: "Last name" },
+                    { key: "email", label: "Email", readOnly: true, value: selectedCourier.email },
                     { key: "phone", label: "Phone" },
                     { key: "vehicleType", label: "Vehicle type" }
                   ].map((field) => (
                     <label key={field.key} className="space-y-2 text-sm text-slate-300">
                       <span>{field.label}</span>
                       <input
-                        value={(editCourierForm as Record<string, string | boolean>)[field.key] as string}
-                        onChange={(event) =>
-                          setEditCourierForm((current) => ({ ...current, [field.key]: event.target.value }))
+                        readOnly={field.readOnly}
+                        value={
+                          field.readOnly
+                            ? field.value ?? ""
+                            : ((editCourierForm as Record<string, string | boolean>)[field.key] as string)
                         }
-                        className="w-full rounded-2xl border border-slate-700 bg-slate-900 px-4 py-3 text-white outline-none"
+                        onChange={(event) =>
+                          field.readOnly
+                            ? undefined
+                            : setEditCourierForm((current) => ({ ...current, [field.key]: event.target.value }))
+                        }
+                        className={`w-full rounded-2xl border border-slate-700 px-4 py-3 text-white outline-none ${
+                          field.readOnly ? "bg-slate-950/70 text-slate-500" : "bg-slate-900"
+                        }`}
                       />
                     </label>
                   ))}
