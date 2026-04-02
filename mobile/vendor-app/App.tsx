@@ -1639,17 +1639,22 @@ function AppContent() {
 
             <View style={styles.panel}>
               <Text style={styles.panelTitle}>Peak Hours</Text>
-              <View style={styles.barRow}>
-                {(peakHours.length ? peakHours : weeklyRevenue.map((day, index) => ({ label: day.label, ordersCount: index + 1 }))).map((day: any, index: number, arr: any[]) => {
-                  const max = Math.max(...arr.map((item: any) => item.ordersCount), 1);
-                  const height = Math.max(12, Math.round((day.ordersCount / max) * 100));
-                  return (
-                  <View key={`${day.label}-${index}`} style={styles.barItem}>
-                    <View style={[styles.barFill, index === 0 ? styles.barFillActive : null, { height: `${height}%` }]} />
-                    <Text style={styles.barLabel}>{day.label}</Text>
-                  </View>
-                )})}
-              </View>
+              {peakHours.length ? (
+                <View style={styles.barRow}>
+                  {peakHours.map((day: any, index: number, arr: any[]) => {
+                    const max = Math.max(...arr.map((item: any) => item.ordersCount), 1);
+                    const height = Math.max(12, Math.round((day.ordersCount / max) * 100));
+                    return (
+                      <View key={`${day.label}-${index}`} style={styles.barItem}>
+                        <View style={[styles.barFill, index === 0 ? styles.barFillActive : null, { height: `${height}%` }]} />
+                        <Text style={styles.barLabel}>{day.label}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <Text style={styles.emptyText}>Peak-hour insights will appear after real order volume builds up.</Text>
+              )}
             </View>
 
             <View style={styles.panel}>

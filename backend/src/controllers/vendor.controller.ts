@@ -157,17 +157,11 @@ export const vendorController = {
         deliveryFee: req.body.deliveryFee ?? 12,
         minimumOrderAmount: req.body.minimumOrderAmount ?? 25,
         estimatedDeliveryMins: req.body.estimatedDeliveryMins ?? 25,
-        storyHeadline: req.body.storyHeadline ?? `Fresh favorites from ${req.body.name}`,
-        storyBody:
-          req.body.storyBody ??
-          `${req.body.name} is now live on BiteHub with carefully prepared meals, dependable delivery, and a kitchen story customers can come back to.`,
+        storyHeadline: req.body.storyHeadline ?? undefined,
+        storyBody: req.body.storyBody ?? undefined,
         priceBand: req.body.priceBand ?? "Mid-range",
         operatingMode: OperatingMode.LIVE,
-        openingHours: [
-          { label: "Mon - Fri", open: "8:00 AM", close: "10:00 PM", isClosed: false },
-          { label: "Saturday", open: "9:00 AM", close: "11:00 PM", isClosed: false },
-          { label: "Sunday", open: "11:00 AM", close: "8:00 PM", isClosed: false }
-        ]
+        openingHours: undefined
       }
     });
 

@@ -128,20 +128,20 @@ export function DashboardShell({
   }
 
   return (
-    <main className="min-h-screen bg-[#f6f6f7] p-3 md:p-4 xl:h-screen xl:overflow-hidden">
+    <main className="min-h-screen bg-transparent p-3 md:p-4 xl:h-screen xl:overflow-hidden">
       {showLogoutPrompt ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[32px] bg-white p-6 shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 backdrop-blur-md">
+          <div className="w-full max-w-md rounded-[32px] border border-white/10 bg-slate-900/95 p-6 shadow-[0_30px_80px_rgba(2,6,23,0.52)]">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-500">Logout</p>
-            <h3 className="mt-3 text-2xl font-semibold text-slate-900">Do you want to log out?</h3>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
+            <h3 className="mt-3 text-2xl font-semibold text-white">Do you want to log out?</h3>
+            <p className="mt-2 text-sm leading-6 text-slate-300">
               You’ll be signed out of the BiteHub admin workspace and returned to the login screen.
             </p>
             <div className="mt-6 flex justify-end gap-3">
               <button
                 type="button"
                 onClick={() => setShowLogoutPrompt(false)}
-                className="rounded-2xl border border-slate-200 px-5 py-3 text-sm font-semibold text-slate-600 transition hover:border-slate-300 hover:bg-slate-50"
+                className="rounded-2xl border border-white/10 bg-slate-800 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/20 hover:bg-slate-700"
               >
                 No, stay here
               </button>
@@ -158,13 +158,13 @@ export function DashboardShell({
       ) : null}
 
       <div className="grid h-full gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
-        <aside className="self-start rounded-[28px] bg-white p-4 shadow-sm xl:h-[calc(100vh-2rem)] xl:overflow-y-auto">
+        <aside className="self-start rounded-[28px] border border-white/10 bg-slate-950/80 p-4 shadow-[0_24px_80px_rgba(2,6,23,0.4)] backdrop-blur xl:h-[calc(100vh-2rem)] xl:overflow-y-auto">
           <div className="flex items-center gap-4 px-2">
             <div className="flex h-16 w-16 items-center justify-center">
               <Image src="/bitehub-icon.png" alt="BiteHub" width={64} height={64} className="h-16 w-16 object-contain" priority />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-slate-900">BiteHub</h1>
+              <h1 className="text-xl font-semibold text-white">BiteHub</h1>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">
                 {superAdmin ? "Super Admin Panel" : "Admin Panel"}
               </p>
@@ -182,8 +182,8 @@ export function DashboardShell({
                   href={item.href}
                   className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
                     active
-                      ? "bg-orange-500 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      ? "bg-orange-500 text-white shadow-[0_12px_30px_rgba(249,115,22,0.35)]"
+                      : "text-slate-300 hover:bg-white/5 hover:text-orange-300"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -193,7 +193,7 @@ export function DashboardShell({
             })}
           </nav>
 
-          <div className="my-8 border-t border-slate-100" />
+          <div className="my-8 border-t border-white/10" />
 
           <nav className="space-y-2">
             {navigation.secondary.map((item) => {
@@ -206,8 +206,8 @@ export function DashboardShell({
                   href={item.href}
                   className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition ${
                     active
-                      ? "bg-orange-500 text-white shadow-sm"
-                      : "text-slate-600 hover:bg-orange-50 hover:text-orange-600"
+                      ? "bg-orange-500 text-white shadow-[0_12px_30px_rgba(249,115,22,0.35)]"
+                      : "text-slate-300 hover:bg-white/5 hover:text-orange-300"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -220,13 +220,13 @@ export function DashboardShell({
 
         <section className="min-w-0 space-y-4 xl:h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
           {superAdmin ? (
-            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] bg-white px-5 py-4 shadow-sm">
-              <label className="flex min-w-[320px] flex-1 items-center gap-3 rounded-2xl bg-slate-50 px-4 py-3 text-slate-400">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/10 bg-slate-950/70 px-5 py-4 shadow-[0_18px_60px_rgba(2,6,23,0.35)] backdrop-blur">
+              <label className="flex min-w-[320px] flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-500">
                 <Search className="h-4 w-4" />
                 <input
                   type="text"
                   placeholder="Search orders, vendors, riders..."
-                  className="w-full bg-transparent text-sm text-slate-600 outline-none placeholder:text-slate-400"
+                  className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
                 />
               </label>
               <div className="flex items-center gap-3">
@@ -237,7 +237,7 @@ export function DashboardShell({
                       setShowInbox((current) => !current);
                       setShowDateMenu(false);
                     }}
-                    className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-50 text-slate-500 transition hover:bg-orange-50 hover:text-orange-500"
+                    className="relative flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-slate-900 text-slate-300 transition hover:bg-slate-800 hover:text-orange-300"
                   >
                     <Bell className="h-4 w-4" />
                     {unreadCount > 0 ? (
@@ -248,21 +248,21 @@ export function DashboardShell({
                   </button>
 
                   {showInbox ? (
-                    <div className="absolute right-0 z-20 mt-3 w-[320px] rounded-[24px] border border-slate-100 bg-white p-4 shadow-xl">
+                    <div className="absolute right-0 z-20 mt-3 w-[320px] rounded-[24px] border border-white/10 bg-slate-950 p-4 shadow-xl">
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-sm font-black text-slate-900">Action inbox</p>
-                          <p className="text-xs text-slate-500">Approvals and high-priority support items</p>
+                          <p className="text-sm font-black text-white">Action inbox</p>
+                          <p className="text-xs text-slate-400">Approvals and high-priority support items</p>
                         </div>
                         <div className="flex items-center gap-3">
                           <button
                             type="button"
                             onClick={() => void markInboxNotificationsRead()}
-                            className="text-xs font-semibold text-slate-500 hover:text-orange-600"
+                            className="text-xs font-semibold text-slate-400 hover:text-orange-300"
                           >
                             Mark all read
                           </button>
-                          <Link href="/notifications" className="text-xs font-semibold text-orange-500 hover:text-orange-600">
+                          <Link href="/notifications" className="text-xs font-semibold text-orange-400 hover:text-orange-300">
                             Notifications
                           </Link>
                         </div>
@@ -270,16 +270,16 @@ export function DashboardShell({
 
                       <div className="mt-4 space-y-3">
                         {inboxQuery.loading ? (
-                          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">Loading inbox...</div>
+                          <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm text-slate-400">Loading inbox...</div>
                         ) : inboxItems.length ? (
                           inboxItems.map((item, index) => (
                             <Link
                               key={`${item.href}-${item.title}-${index}`}
                               href={item.href}
                               onClick={() => setShowInbox(false)}
-                              className="block rounded-2xl bg-slate-50 px-4 py-3 transition hover:bg-orange-50"
+                              className="block rounded-2xl bg-slate-900 px-4 py-3 transition hover:bg-slate-800"
                             >
-                              <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                              <p className="text-sm font-semibold text-white">{item.title}</p>
                               <p
                                 className={`mt-1 text-xs font-semibold ${
                                   item.tone === "rose"
@@ -296,7 +296,7 @@ export function DashboardShell({
                             </Link>
                           ))
                         ) : (
-                          <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-500">
+                          <div className="rounded-2xl bg-slate-900 px-4 py-3 text-sm text-slate-400">
                             No urgent items right now.
                           </div>
                         )}
@@ -312,14 +312,14 @@ export function DashboardShell({
                       setShowDateMenu((current) => !current);
                       setShowInbox(false);
                     }}
-                    className="flex items-center gap-2 rounded-2xl bg-slate-50 px-4 py-3 text-sm font-medium text-slate-600 transition hover:bg-orange-50 hover:text-orange-600"
+                    className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-medium text-slate-200 transition hover:bg-slate-800 hover:text-orange-300"
                   >
                     <span>{getAdminDateRangeLabel(activeRange)}</span>
                     <ChevronDown className="h-4 w-4" />
                   </button>
 
                   {showDateMenu ? (
-                    <div className="absolute right-0 z-20 mt-3 w-44 rounded-[24px] border border-slate-100 bg-white p-2 shadow-xl">
+                    <div className="absolute right-0 z-20 mt-3 w-44 rounded-[24px] border border-white/10 bg-slate-950 p-2 shadow-xl">
                       {adminDateRangeOptions.map((option) => {
                         const active = option.value === activeRange;
                         return (
@@ -328,7 +328,7 @@ export function DashboardShell({
                             type="button"
                             onClick={() => handleRangeChange(option.value)}
                             className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-sm transition ${
-                              active ? "bg-orange-500 font-semibold text-white" : "text-slate-600 hover:bg-orange-50"
+                              active ? "bg-orange-500 font-semibold text-white" : "text-slate-300 hover:bg-slate-800"
                             }`}
                           >
                             <span>{option.label}</span>
@@ -342,7 +342,7 @@ export function DashboardShell({
                 <button
                   type="button"
                   onClick={handleLogout}
-                  className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                  className="flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-slate-800 hover:text-orange-300"
                 >
                   <LogOut className="h-4 w-4" />
                   <span>Logout</span>
@@ -351,24 +351,24 @@ export function DashboardShell({
             </div>
           ) : null}
 
-          <header className="rounded-[28px] bg-white p-5 shadow-sm">
+          <header className="rounded-[28px] border border-white/10 bg-slate-950/70 p-5 shadow-[0_18px_60px_rgba(2,6,23,0.35)] backdrop-blur">
             <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-orange-500">Manager Workspace</p>
             <div className="mt-4 flex flex-wrap items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-semibold text-slate-900 xl:text-3xl">{title}</h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-500">{description}</p>
+                <h2 className="text-2xl font-semibold text-white xl:text-3xl">{title}</h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">{description}</p>
               </div>
               <div className="flex items-start gap-3">
-                <div className="rounded-2xl bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">Signed in as</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-900">{managerTitle}</p>
-                  <p className="mt-1 text-xs text-slate-500">{managerName || session.user.email}</p>
+                <div className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">Signed in as</p>
+                  <p className="mt-2 text-sm font-semibold text-white">{managerTitle}</p>
+                  <p className="mt-1 text-xs text-slate-400">{managerName || session.user.email}</p>
                 </div>
                 {!superAdmin ? (
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-600 transition hover:border-orange-200 hover:bg-orange-50 hover:text-orange-600"
+                    className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm font-semibold text-slate-200 transition hover:border-orange-400/40 hover:bg-slate-800 hover:text-orange-300"
                   >
                     <LogOut className="h-4 w-4" />
                     <span>Logout</span>

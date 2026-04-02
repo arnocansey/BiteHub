@@ -6,7 +6,6 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BiteHubSplash } from "./components/BiteHubSplash";
 
@@ -87,36 +86,6 @@ function buildLocationLabel(places: Location.LocationGeocodedAddress[]) {
   const place = places[0];
   if (!place) return null;
   return [place.district, place.city, place.region, place.country].filter(Boolean).slice(0, 3).join(", ");
-}
-
-function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: number | null }>) {
-  const valid = points.filter(
-    (point): point is { latitude: number; longitude: number } =>
-      typeof point.latitude === "number" && typeof point.longitude === "number"
-  );
-
-  if (!valid.length) {
-    return {
-      latitude: 5.6037,
-      longitude: -0.187,
-      latitudeDelta: 0.08,
-      longitudeDelta: 0.08
-    };
-  }
-
-  const latitudes = valid.map((point) => point.latitude);
-  const longitudes = valid.map((point) => point.longitude);
-  const minLat = Math.min(...latitudes);
-  const maxLat = Math.max(...latitudes);
-  const minLng = Math.min(...longitudes);
-  const maxLng = Math.max(...longitudes);
-
-  return {
-    latitude: (minLat + maxLat) / 2,
-    longitude: (minLng + maxLng) / 2,
-    latitudeDelta: Math.max(0.02, (maxLat - minLat) * 1.8 || 0.02),
-    longitudeDelta: Math.max(0.02, (maxLng - minLng) * 1.8 || 0.02)
-  };
 }
 
 export default function App() {
@@ -1036,20 +1005,6 @@ function AppContent() {
     return menu.slice(0, 4);
   }, [menu, selectedRestaurant]);
   const recentOrders = useMemo(() => orders.slice(0, 6), [orders]);
-  const trackingMapRegion = useMemo(
-    () =>
-      buildMapRegion([
-        {
-          latitude: trackingDelivery?.riderProfile?.currentLatitude,
-          longitude: trackingDelivery?.riderProfile?.currentLongitude
-        },
-        {
-          latitude: trackedOrder?.deliveryAddress?.latitude ?? trackingDelivery?.order?.deliveryAddress?.latitude,
-          longitude: trackedOrder?.deliveryAddress?.longitude ?? trackingDelivery?.order?.deliveryAddress?.longitude
-        }
-      ]),
-    [trackedOrder, trackingDelivery]
-  );
 
   const nav = (
     <View style={styles.bottomNavWrap}>
@@ -1498,7 +1453,7 @@ function AppContent() {
       {activeTab === "orders" ? <View style={styles.shell}>{!session ? authGateScreen : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.ordersScroll}><Text style={styles.ordersPageTitle}>Orders</Text>{recentOrders.map((order, index) => <Pressable key={order.id} style={[styles.orderShowcaseCard, index % 2 === 0 ? styles.orderShowcaseGreen : styles.orderShowcaseBlue]} onPress={() => { setTrackedOrder(order); setActiveTab("home"); setActiveScreen("tracking"); void loadTracking(order.id); }}><View style={styles.orderShowcaseHeader}><View style={styles.orderBadge}><Text style={styles.orderBadgeText}>{order.restaurant?.name?.slice(0, 1) ?? "B"}</Text></View><View style={{ flex: 1 }}><Text style={styles.orderShowcaseTitle}>{order.restaurant?.name ?? "BiteHub Kitchen"}</Text><Text style={styles.cardMeta}>{String(order.status).replaceAll("_", " ")}</Text></View><View style={styles.orderPriceChip}><Text style={styles.orderPriceChipText}>{formatMoney(Number(order.totalAmount ?? 0))}</Text></View></View><View style={styles.orderFoodHero}><Ionicons name={index % 2 === 0 ? "fast-food" : "pizza"} size={92} color="#8d2d00" /></View><View style={styles.orderCourierRow}><View style={styles.orderCourierAvatar}><Text style={styles.orderCourierInitial}>{order.rider?.user?.firstName?.slice(0, 1) ?? "A"}</Text></View><View style={{ flex: 1 }}><Text style={styles.detailOwnerName}>{order.rider?.user?.firstName ?? "Assigned"} {order.rider?.user?.lastName ?? "Rider"}</Text><Text style={styles.cardMeta}>{order.deliveryAddress?.label ?? "Pickup and delivery in progress"}</Text></View><View style={styles.orderActions}><Ionicons name="location-outline" size={18} color="#111827" /><Ionicons name="call-outline" size={18} color="#111827" /></View></View></Pressable>)}{!recentOrders.length ? <View style={styles.summary}><Text style={styles.cardTitle}>No orders yet</Text><Text style={styles.cardMeta}>Once you place an order, it will appear here in the cleaner card stack.</Text></View> : null}</ScrollView>}{nav}</View> : null}
       {activeTab === "saved" ? <View style={styles.shell}>{!session ? authGateScreen : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><Text style={styles.headerTitle}>Saved Restaurants</Text>{favorites.map((favorite) => <View key={favorite.id} style={styles.card}><View style={styles.thumb}><Text style={styles.thumbText}>{favorite.restaurant?.name?.slice(0, 1) ?? "S"}</Text></View><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{favorite.restaurant?.name ?? "Restaurant"}</Text><Text style={styles.cardMeta}>{favorite.restaurant?.address ?? ""}</Text></View></View>)}</ScrollView>}{nav}</View> : null}
       {activeTab === "profile" ? <View style={styles.shell}>{!session ? authGateScreen : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><Text style={styles.headerTitle}>My Profile</Text><View style={styles.profileCard}><View style={styles.avatar}><Text style={styles.avatarText}>{profile?.firstName?.[0] ?? session.user.firstName[0]}{profile?.lastName?.[0] ?? session.user.lastName[0]}</Text></View><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{profile?.firstName ?? session.user.firstName} {profile?.lastName ?? session.user.lastName}</Text><Text style={styles.cardMeta}>{profile?.email ?? session.user.email}</Text><Text style={styles.cardMeta}>{profile?.customerProfile?.defaultAddress ?? "No default address set"}</Text></View></View><View style={styles.summary}><Text style={styles.cardTitle}>Notifications</Text><Text style={styles.cardMeta}>{unreadNotificationCount} unread notification(s)</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void markAllNotificationsRead()}><Text style={styles.secondaryButtonText}>Mark all read</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void clearReadNotifications()}><Text style={styles.secondaryButtonText}>Clear read</Text></Pressable></View>{notifications.length ? notifications.slice(0, 5).map((notification) => <Pressable key={notification.id} style={styles.collectionReason} onPress={() => void markNotificationRead(notification.id)}><Text style={styles.cardTitleSmall}>{notification.title}</Text><Text style={styles.cardMeta}>{notification.body}</Text><Text style={styles.cardMeta}>{notification.isRead ? "Read" : "Tap to mark as read"}</Text></Pressable>) : <Text style={styles.cardMeta}>No notifications yet.</Text>}</View><View style={styles.summary}><Text style={styles.cardTitle}>Loyalty</Text><Text style={styles.cardMeta}>Tier: {retentionOverview?.loyaltyWallet?.tier ?? profile?.customerProfile?.loyaltyWallet?.tier ?? "CORE"}</Text><Text style={styles.price}>{retentionOverview?.loyaltyWallet?.pointsBalance ?? profile?.customerProfile?.loyaltyWallet?.pointsBalance ?? 0} points</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void createMealPlan()}><Text style={styles.secondaryButtonText}>Create meal plan</Text></Pressable></View>{supportStatus ? <Text style={styles.cardMeta}>{supportStatus}</Text> : null}</View>{retentionOverview?.subscriptions?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Subscriptions</Text>{retentionOverview.subscriptions.map((subscription: any) => <View key={subscription.id} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{subscription.name}</Text><Text style={styles.cardMeta}>{subscription.benefitsSummary}</Text></View>)}</View> : null}{retentionOverview?.mealPlans?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Meal plans</Text>{retentionOverview.mealPlans.map((plan: any) => <View key={plan.id} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{plan.title}</Text><Text style={styles.cardMeta}>{plan.goal ?? "Personal plan"} | {plan.mealsPerWeek} meals/week</Text></View>)}</View> : null}{retentionOverview?.scheduledOrders?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Scheduled orders</Text>{retentionOverview.scheduledOrders.map((scheduled: any) => <View key={scheduled.id} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{scheduled.title}</Text><Text style={styles.cardMeta}>{scheduled.restaurant?.name ?? "Restaurant"} | {scheduled.cadenceLabel}</Text></View>)}</View> : null}{retentionOverview?.reorderSuggestions?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Reorder suggestions</Text>{retentionOverview.reorderSuggestions.map((suggestion: any) => <View key={suggestion.orderId} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{suggestion.restaurantName}</Text><Text style={styles.cardMeta}>{(suggestion.topItems ?? []).join(", ")}</Text></View>)}</View> : null}<View style={styles.summary}><Text style={styles.cardTitle}>Account</Text><Text style={styles.cardMeta}>Sign out of your BiteHub customer session on this device.</Text><Pressable style={styles.primaryButton} onPress={signOut}><Text style={styles.primaryButtonText}>Sign Out</Text></Pressable></View></ScrollView>}{nav}</View> : null}
-        {activeTab === "home" && activeScreen === "tracking" ? <View style={styles.shell}><View style={styles.headerRow}><Pressable style={styles.iconButton} onPress={() => setActiveScreen("browse")}><Text style={styles.iconButtonText}>Back</Text></Pressable><Text style={styles.headerTitle}>Track Order</Text></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><View style={styles.summary}><Text style={styles.cardTitle}>{trackedOrder?.restaurant?.name ?? selectedRestaurant?.name ?? "BiteHub order"}</Text><Text style={styles.cardMeta}>{trackedOrder?.id ?? "Live tracking"}</Text><Text style={styles.price}>ETA {eta?.etaMinutes ?? "--"} min | {eta?.confidencePercent ?? "--"}% confidence</Text>{eta?.delayReason ? <Text style={styles.cardMeta}>{eta.delayReason}</Text> : null}</View>{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Live delivery map</Text><View style={styles.mapCard}><MapView style={styles.mapView} initialRegion={trackingMapRegion} region={trackingMapRegion}><Marker coordinate={{ latitude: trackedOrder?.deliveryAddress?.latitude ?? trackingDelivery?.order?.deliveryAddress?.latitude ?? trackingMapRegion.latitude, longitude: trackedOrder?.deliveryAddress?.longitude ?? trackingDelivery?.order?.deliveryAddress?.longitude ?? trackingMapRegion.longitude }} title={trackedOrder?.deliveryAddress?.label ?? trackingDelivery?.order?.deliveryAddress?.label ?? "Your address"} pinColor="#f97316" />{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? <Marker coordinate={{ latitude: trackingDelivery.riderProfile.currentLatitude, longitude: trackingDelivery.riderProfile.currentLongitude }} title="Rider" description={`${trackingDelivery.riderProfile.user?.firstName ?? "Rider"} ${trackingDelivery.riderProfile.user?.lastName ?? ""}`.trim()} pinColor="#111827" /> : null}</MapView></View></View> : null}{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Your rider</Text><Text style={styles.cardMeta}>{trackingDelivery.riderProfile.user?.firstName ?? "Rider"} {trackingDelivery.riderProfile.user?.lastName ?? ""}{trackingDelivery.riderProfile.vehicleType ? ` | ${trackingDelivery.riderProfile.vehicleType}` : ""}</Text><Text style={styles.cardMeta}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known location: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "Live rider location will appear once the rider is active."}</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void callRider()}><Text style={styles.secondaryButtonText}>Call rider</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open rider location</Text></Pressable></View></View> : null}<View style={styles.summary}><Text style={styles.cardTitle}>Timeline</Text>{timeline.length ? timeline.map((event) => <View key={event.id} style={styles.timelineRow}><View style={styles.timelineDot} /><View style={{ flex: 1 }}><Text style={styles.cardTitleSmall}>{event.title}</Text>{event.description ? <Text style={styles.cardMeta}>{event.description}</Text> : null}</View></View>) : <Text style={styles.cardMeta}>Tracking data will appear here when the order moves.</Text>}</View>{session && trackedOrder ? <View style={styles.summary}><Text style={styles.cardTitle}>Need help?</Text><TextInput value={supportMessage} onChangeText={setSupportMessage} placeholder="Describe the issue with this order" placeholderTextColor="#9ca3af" style={styles.input} />{supportStatus ? <Text style={styles.cardMeta}>{supportStatus}</Text> : null}<Pressable style={styles.primaryButton} onPress={() => void createSupportTicket()}><Text style={styles.primaryButtonText}>Contact Support</Text></Pressable></View> : null}</ScrollView></View> : null}
+        {activeTab === "home" && activeScreen === "tracking" ? <View style={styles.shell}><View style={styles.headerRow}><Pressable style={styles.iconButton} onPress={() => setActiveScreen("browse")}><Text style={styles.iconButtonText}>Back</Text></Pressable><Text style={styles.headerTitle}>Track Order</Text></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><View style={styles.summary}><Text style={styles.cardTitle}>{trackedOrder?.restaurant?.name ?? selectedRestaurant?.name ?? "BiteHub order"}</Text><Text style={styles.cardMeta}>{trackedOrder?.id ?? "Live tracking"}</Text><Text style={styles.price}>ETA {eta?.etaMinutes ?? "--"} min | {eta?.confidencePercent ?? "--"}% confidence</Text>{eta?.delayReason ? <Text style={styles.cardMeta}>{eta.delayReason}</Text> : null}</View>{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Live rider location</Text><View style={styles.locationSignalCard}><View style={styles.locationSignalHeader}><View style={styles.locationSignalBadge}><Ionicons name="navigate" size={16} color="#c2410c" /></View><View style={{ flex: 1 }}><Text style={styles.locationSignalTitle}>Rider route is active</Text><Text style={styles.locationSignalCopy}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known coordinates: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "We will show the rider's last known location as soon as they start moving."}</Text></View></View><View style={styles.locationSignalFooter}><Text style={styles.locationSignalMeta}>{trackedOrder?.deliveryAddress?.label ?? trackingDelivery?.order?.deliveryAddress?.label ?? "Delivery destination"}</Text><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open live location</Text></Pressable></View></View></View> : null}{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Your rider</Text><Text style={styles.cardMeta}>{trackingDelivery.riderProfile.user?.firstName ?? "Rider"} {trackingDelivery.riderProfile.user?.lastName ?? ""}{trackingDelivery.riderProfile.vehicleType ? ` | ${trackingDelivery.riderProfile.vehicleType}` : ""}</Text><Text style={styles.cardMeta}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known location: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "Live rider location will appear once the rider is active."}</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void callRider()}><Text style={styles.secondaryButtonText}>Call rider</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open rider location</Text></Pressable></View></View> : null}<View style={styles.summary}><Text style={styles.cardTitle}>Timeline</Text>{timeline.length ? timeline.map((event) => <View key={event.id} style={styles.timelineRow}><View style={styles.timelineDot} /><View style={{ flex: 1 }}><Text style={styles.cardTitleSmall}>{event.title}</Text>{event.description ? <Text style={styles.cardMeta}>{event.description}</Text> : null}</View></View>) : <Text style={styles.cardMeta}>Tracking data will appear here when the order moves.</Text>}</View>{session && trackedOrder ? <View style={styles.summary}><Text style={styles.cardTitle}>Need help?</Text><TextInput value={supportMessage} onChangeText={setSupportMessage} placeholder="Describe the issue with this order" placeholderTextColor="#9ca3af" style={styles.input} />{supportStatus ? <Text style={styles.cardMeta}>{supportStatus}</Text> : null}<Pressable style={styles.primaryButton} onPress={() => void createSupportTicket()}><Text style={styles.primaryButtonText}>Contact Support</Text></Pressable></View> : null}</ScrollView></View> : null}
     </SafeAreaView>
   );
 }
@@ -1601,8 +1556,13 @@ const styles = StyleSheet.create({
   confirmationTitle: { marginTop: 16, textAlign: "center", fontSize: 24, lineHeight: 30, fontWeight: "900", color: "#ffffff" },
   confirmationCopy: { marginTop: 10, textAlign: "center", fontSize: 13, lineHeight: 20, color: "#d1d5db" },
   confirmationSteps: { marginTop: 10, gap: 6 },
-  mapCard: { marginTop: 12, borderRadius: 22, overflow: "hidden", backgroundColor: "#f3f4f6" },
-  mapView: { width: "100%", height: 220 },
+  locationSignalCard: { marginTop: 12, borderRadius: 22, backgroundColor: "#fff7ed", padding: 16, borderWidth: 1, borderColor: "#fed7aa", gap: 14 },
+  locationSignalHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  locationSignalBadge: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center" },
+  locationSignalTitle: { fontSize: 15, fontWeight: "800", color: "#111827" },
+  locationSignalCopy: { marginTop: 4, color: "#6b7280", fontSize: 12, lineHeight: 18 },
+  locationSignalFooter: { gap: 10 },
+  locationSignalMeta: { color: "#9a3412", fontSize: 12, fontWeight: "700" },
   ordersScroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 },
   ordersPageTitle: { marginBottom: 16, fontSize: 28, fontWeight: "900", color: "#111827", alignSelf: "center" },
   orderShowcaseCard: { marginBottom: 16, borderRadius: 30, padding: 16, overflow: "hidden" },
@@ -1628,68 +1588,68 @@ const styles = StyleSheet.create({
   toggleChipActive: { backgroundColor: "#fff7ed" },
   toggleChipText: { color: "#6b7280", fontSize: 12, fontWeight: "700" },
   toggleChipTextActive: { color: "#c2410c" },
-  darkShell: { backgroundColor: "#171717" },
+  darkShell: { backgroundColor: "#f9fafb" },
   darkBrowseScroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20 },
   darkBrowseHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
   darkLocationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  darkLocationTitle: { color: "#f3f4f6", fontSize: 15, fontWeight: "800" },
-  darkLocationMeta: { color: "#8a8a8a", fontSize: 12, marginTop: 2 },
-  darkSearchWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 16, backgroundColor: "#222222", paddingHorizontal: 12, paddingVertical: 10, maxWidth: 180 },
-  darkSearchInput: { flex: 1, color: "#f3f4f6", fontSize: 13 },
+  darkLocationTitle: { color: "#111827", fontSize: 15, fontWeight: "800" },
+  darkLocationMeta: { color: "#6b7280", fontSize: 12, marginTop: 2 },
+  darkSearchWrap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 8, borderRadius: 16, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 10, maxWidth: 180, borderWidth: 1, borderColor: "#ffedd5" },
+  darkSearchInput: { flex: 1, color: "#111827", fontSize: 13 },
   restaurantGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 16 },
   restaurantGridCard: { width: "47%" },
-  restaurantGridImageWrap: { height: 138, borderRadius: 16, overflow: "hidden", borderWidth: 1.5, borderColor: "#d7c94c", backgroundColor: "#222222" },
+  restaurantGridImageWrap: { height: 138, borderRadius: 16, overflow: "hidden", borderWidth: 1.5, borderColor: "#fdba74", backgroundColor: "#fff7ed" },
   restaurantGridImage: { width: "100%", height: "100%" },
-  restaurantGridImageFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#2a2a2a" },
+  restaurantGridImageFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#fff7ed" },
   closedOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.48)" },
   closedOverlayText: { color: "#ffffff", fontSize: 22, fontWeight: "700" },
   restaurantGridMeta: { marginTop: 8, position: "relative" },
-  restaurantGridTitle: { color: "#f3f4f6", fontSize: 14, fontWeight: "700", paddingRight: 40 },
+  restaurantGridTitle: { color: "#111827", fontSize: 14, fontWeight: "700", paddingRight: 40 },
   restaurantGridInfoRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 },
-  restaurantGridInfoText: { color: "#d7c94c", fontSize: 12 },
-  offerBadge: { position: "absolute", top: -2, right: 0, borderRadius: 8, backgroundColor: "#f8de68", paddingHorizontal: 8, paddingVertical: 3 },
-  offerBadgeText: { color: "#111111", fontSize: 11, fontWeight: "800" },
-  restaurantMenuScroll: { paddingBottom: 120, backgroundColor: "#171717" },
-  restaurantHero: { height: 230, position: "relative", backgroundColor: "#242424" },
+  restaurantGridInfoText: { color: "#9a3412", fontSize: 12 },
+  offerBadge: { position: "absolute", top: -2, right: 0, borderRadius: 8, backgroundColor: "#fde68a", paddingHorizontal: 8, paddingVertical: 3 },
+  offerBadgeText: { color: "#92400e", fontSize: 11, fontWeight: "800" },
+  restaurantMenuScroll: { paddingBottom: 120, backgroundColor: "#f9fafb" },
+  restaurantHero: { height: 230, position: "relative", backgroundColor: "#fff7ed" },
   restaurantHeroImage: { width: "100%", height: "100%" },
-  restaurantHeroFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#303030" },
-  restaurantHeroButton: { position: "absolute", top: 18, left: 16, width: 38, height: 38, borderRadius: 14, backgroundColor: "rgba(20,20,20,0.7)", alignItems: "center", justifyContent: "center" },
-  ratingPill: { position: "absolute", top: 18, right: 16, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 16, backgroundColor: "rgba(20,20,20,0.82)", paddingHorizontal: 12, paddingVertical: 9 },
-  ratingPillText: { color: "#f3f4f6", fontSize: 13, fontWeight: "800" },
-  restaurantTitleBand: { backgroundColor: "#2a2a2a", paddingHorizontal: 18, paddingVertical: 12 },
-  restaurantTitleBandText: { color: "#f8de68", fontSize: 24, fontWeight: "700" },
-  menuTabRow: { paddingHorizontal: 18, paddingTop: 12, borderBottomWidth: 1, borderBottomColor: "#2e2e2e" },
-  menuTabTextActive: { color: "#f3f4f6", fontSize: 16, fontWeight: "700", borderBottomWidth: 2, borderBottomColor: "#d7c94c", paddingBottom: 10, alignSelf: "flex-start" },
+  restaurantHeroFallback: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#ffedd5" },
+  restaurantHeroButton: { position: "absolute", top: 18, left: 16, width: 38, height: 38, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.88)", alignItems: "center", justifyContent: "center" },
+  ratingPill: { position: "absolute", top: 18, right: 16, flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.92)", paddingHorizontal: 12, paddingVertical: 9 },
+  ratingPillText: { color: "#111827", fontSize: 13, fontWeight: "800" },
+  restaurantTitleBand: { backgroundColor: "#ffffff", paddingHorizontal: 18, paddingVertical: 12 },
+  restaurantTitleBandText: { color: "#111827", fontSize: 24, fontWeight: "700" },
+  menuTabRow: { paddingHorizontal: 18, paddingTop: 12, borderBottomWidth: 1, borderBottomColor: "#fed7aa" },
+  menuTabTextActive: { color: "#c2410c", fontSize: 16, fontWeight: "700", borderBottomWidth: 2, borderBottomColor: "#f97316", paddingBottom: 10, alignSelf: "flex-start" },
   restaurantMenuSection: { paddingHorizontal: 18, paddingTop: 26 },
-  restaurantMenuSectionTitle: { color: "#f3f4f6", fontSize: 16, fontWeight: "700", marginBottom: 16 },
-  restaurantMenuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: "#2e2e2e" },
-  restaurantMenuItemTitle: { color: "#f3f4f6", fontSize: 18, fontWeight: "600" },
-  restaurantMenuItemPrice: { color: "#d7c94c", fontSize: 16, marginTop: 6 },
-  customizationBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
-  customizationSheet: { backgroundColor: "#1f1f1f", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "84%", paddingTop: 18 },
+  restaurantMenuSectionTitle: { color: "#111827", fontSize: 16, fontWeight: "700", marginBottom: 16 },
+  restaurantMenuItem: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: "#ffedd5" },
+  restaurantMenuItemTitle: { color: "#111827", fontSize: 18, fontWeight: "600" },
+  restaurantMenuItemPrice: { color: "#c2410c", fontSize: 16, marginTop: 6 },
+  customizationBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(17,24,39,0.28)", justifyContent: "flex-end" },
+  customizationSheet: { backgroundColor: "#ffffff", borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: "84%", paddingTop: 18 },
   customizationSheetContent: { paddingHorizontal: 18, paddingBottom: 14 },
   customizationHeader: { paddingRight: 32, marginBottom: 18 },
-  customizationTitle: { color: "#f3f4f6", fontSize: 24, fontWeight: "700" },
-  customizationSubtitle: { color: "#d7c94c", fontSize: 16, marginTop: 6 },
+  customizationTitle: { color: "#111827", fontSize: 24, fontWeight: "700" },
+  customizationSubtitle: { color: "#c2410c", fontSize: 16, marginTop: 6 },
   customizationGroup: { marginBottom: 24 },
   customizationGroupHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
-  customizationGroupTitle: { color: "#f8de68", fontSize: 22, fontWeight: "700" },
-  requiredBadge: { borderRadius: 999, backgroundColor: "#f8de68", color: "#111111", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "800" },
-  customizationGroupCopy: { color: "#a3a3a3", fontSize: 14, marginBottom: 10 },
+  customizationGroupTitle: { color: "#c2410c", fontSize: 22, fontWeight: "700" },
+  requiredBadge: { borderRadius: 999, backgroundColor: "#fde68a", color: "#92400e", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "800" },
+  customizationGroupCopy: { color: "#6b7280", fontSize: 14, marginBottom: 10 },
   customizationOptionRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12 },
-  optionSelector: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "#f3f4f6", alignItems: "center", justifyContent: "center" },
-  optionSelectorActive: { borderColor: "#f8de68", backgroundColor: "#f8de68" },
+  optionSelector: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: "#d1d5db", alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff" },
+  optionSelectorActive: { borderColor: "#f97316", backgroundColor: "#fed7aa" },
   optionSelectorInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: "transparent" },
-  optionSelectorInnerActive: { backgroundColor: "#111111" },
-  customizationOptionText: { flex: 1, color: "#f3f4f6", fontSize: 16 },
-  customizationOptionPrice: { color: "#d7c94c", fontSize: 16 },
-  customizationNoteInput: { borderRadius: 18, backgroundColor: "#111111", color: "#f3f4f6", minHeight: 54, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 10 },
-  customizationFooter: { flexDirection: "row", alignItems: "center", gap: 14, borderTopWidth: 1, borderTopColor: "#2e2e2e", paddingHorizontal: 18, paddingTop: 14, paddingBottom: 24 },
-  customizationQuantityRow: { flexDirection: "row", alignItems: "center", gap: 16, flex: 1 },
+  optionSelectorInnerActive: { backgroundColor: "#c2410c" },
+  customizationOptionText: { flex: 1, color: "#111827", fontSize: 16 },
+  customizationOptionPrice: { color: "#c2410c", fontSize: 16 },
+  customizationNoteInput: { borderRadius: 18, backgroundColor: "#f9fafb", color: "#111827", minHeight: 54, paddingHorizontal: 14, paddingVertical: 14, marginBottom: 10, borderWidth: 1, borderColor: "#ffedd5" },
+  customizationFooter: { flexDirection: "row", alignItems: "center", gap: 14, borderTopWidth: 1, borderTopColor: "#ffedd5", paddingHorizontal: 18, paddingTop: 14, paddingBottom: 24, backgroundColor: "#ffffff" },
+  customizationQuantityRow: { flexDirection: "row", alignItems: "center", gap: 16, flex: 1, backgroundColor: "#fff7ed", borderRadius: 18, paddingHorizontal: 10, paddingVertical: 8 },
   customizationQuantityButton: { width: 34, height: 34, borderRadius: 17, alignItems: "center", justifyContent: "center" },
-  customizationQuantitySymbol: { color: "#d7c94c", fontSize: 26, fontWeight: "400" },
-  customizationQuantityValue: { color: "#f8de68", fontSize: 30, fontWeight: "300" },
-  customizationAddButton: { minWidth: 112, borderRadius: 22, backgroundColor: "#bfbfbf", paddingHorizontal: 24, paddingVertical: 14, alignItems: "center" },
-  customizationAddButtonText: { color: "#2b2b2b", fontSize: 20, fontWeight: "700" },
-  customizationClose: { position: "absolute", top: 14, right: 16, width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" }
+  customizationQuantitySymbol: { color: "#c2410c", fontSize: 26, fontWeight: "400" },
+  customizationQuantityValue: { color: "#c2410c", fontSize: 30, fontWeight: "300" },
+  customizationAddButton: { minWidth: 112, borderRadius: 22, backgroundColor: "#f97316", paddingHorizontal: 24, paddingVertical: 14, alignItems: "center" },
+  customizationAddButtonText: { color: "#ffffff", fontSize: 20, fontWeight: "700" },
+  customizationClose: { position: "absolute", top: 14, right: 16, width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#fff7ed" }
 });
