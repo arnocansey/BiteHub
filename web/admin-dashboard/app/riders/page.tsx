@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useEffect, useState } from "react";
 import { Bike, Clock3, Flame, MapPinned, Radio, Search, ShieldCheck, Siren, UserRound } from "lucide-react";
 import { AccessDeniedCard, AuthRequiredCard, EmptyCard, ErrorCard, LoadingCard } from "../../components/admin-states";
 import { DashboardShell } from "../../components/dashboard-shell";
@@ -70,6 +71,14 @@ type LiveRider = {
   } | null;
 };
 
+type RestaurantRecord = {
+  id: string;
+  name: string;
+  address?: string | null;
+  averageRating?: number | null;
+  isFeatured?: boolean;
+};
+
 function formatRiderName(input?: { firstName?: string; lastName?: string } | null) {
   const full = [input?.firstName, input?.lastName].filter(Boolean).join(" ").trim();
   return full || "Unassigned rider";
@@ -111,16 +120,20 @@ function getZoneHeat(zone: { demandLevel: number; supplyLevel: number; activeOrd
 
 export default function RidersPage() {
   const { session, ready } = useAdminSessionState();
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+  const [selectedRiderId, setSelectedRiderId] = useState<string | null>(null);
+  const [selectedRestaurantId, setSelectedRestaurantId] = useState<string | null>(null);
   const query = useAdminData(
     async () => {
-      const [pendingRiders, ops, orders, liveRiders] = await Promise.all([
+      const [pendingRiders, ops, orders, liveRiders, restaurants] = await Promise.all([
         adminRequest<RiderApproval[]>("/admin/riders/pending"),
         adminRequest<OperationsIntelligence>("/admin/reports/operations"),
         adminRequest<AdminOrder[]>("/admin/orders"),
-        adminRequest<LiveRider[]>("/admin/riders/live")
+        adminRequest<LiveRider[]>("/admin/riders/live"),
+        adminRequest<RestaurantRecord[]>("/admin/restaurants")
       ]);
 
-      return { pendingRiders, ops, orders, liveRiders };
+      return { pendingRiders, ops, orders, liveRiders, restaurants };
     },
     [session?.accessToken]
   );
@@ -134,6 +147,7 @@ export default function RidersPage() {
   const heatmap = query.data?.ops.heatmap ?? [];
   const orders = query.data?.orders ?? [];
   const liveRidersData = query.data?.liveRiders ?? [];
+  const restaurants = query.data?.restaurants ?? [];
   const riderQuality = (query.data?.ops.qualityScores ?? []).filter((score) => score.riderProfile?.user);
   const activeOrdersList = orders.filter((order) =>
     ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
@@ -143,9 +157,33 @@ export default function RidersPage() {
     const rightPressure = Number(right.demandLevel ?? 0) - Number(right.supplyLevel ?? 0) + Number(right.activeOrders ?? 0) * 0.35;
     return rightPressure - leftPressure;
   });
-  const focusedOrder = activeOrdersList[0] ?? orders[0] ?? null;
-  const focusedZone = rankedZones[0] ?? null;
-  const focusedRider = riderQuality[0] ?? null;
+  useEffect(() => {
+    if (!selectedZoneId && rankedZones[0]) {
+      setSelectedZoneId(rankedZones[0].id);
+    }
+  }, [rankedZones, selectedZoneId]);
+
+  const selectedZone = rankedZones.find((zone) => zone.id === selectedZoneId) ?? null;
+  const filteredOrders = selectedZone
+    ? activeOrdersList.filter((order) => {
+        const restaurantRecord = restaurants.find(
+          (restaurant) => restaurant.name?.trim().toLowerCase() === order.restaurant?.name?.trim().toLowerCase()
+        );
+        const searchText = `${restaurantRecord?.address ?? ""} ${restaurantRecord?.name ?? order.restaurant?.name ?? ""}`.toLowerCase();
+        return selectedZone.zoneLabel
+          .toLowerCase()
+          .split(/\s+/)
+          .some((token) => token.length > 2 && searchText.includes(token));
+      })
+    : activeOrdersList;
+  const focusedOrder = filteredOrders[0] ?? activeOrdersList[0] ?? orders[0] ?? null;
+  const focusedZone = selectedZone ?? rankedZones[0] ?? null;
+  const selectedLiveRider = liveRidersData.find((rider) => rider.id === selectedRiderId) ?? null;
+  const focusedQualitySignal = riderQuality[0] ?? null;
+  const focusedRestaurant =
+    restaurants.find((restaurant) => restaurant.id === selectedRestaurantId) ??
+    restaurants.find((restaurant) => restaurant.name?.trim().toLowerCase() === focusedOrder?.restaurant?.name?.trim().toLowerCase()) ??
+    null;
 
   const nearbyRidersQuery = useAdminData(
     () =>
@@ -169,7 +207,7 @@ export default function RidersPage() {
         ? Math.round(heatmap.reduce((sum, zone) => sum + Number(zone.demandLevel ?? 0) * 3.2, 18) / heatmap.length)
         : 24;
 
-  const feedRows = activeOrdersList.map((order) => ({
+  const feedRows = filteredOrders.map((order) => ({
     id: order.id,
     orderCode: order.id.slice(0, 8).toUpperCase(),
     customer: formatCustomerName(order.customer),
@@ -323,11 +361,31 @@ export default function RidersPage() {
                 </div>
               </div>
 
-              <GhanaDispatchMap zones={rankedZones.slice(0, 8)} activeRiders={liveRidersData} focusedZoneId={focusedZone?.id ?? null} />
+              <GhanaDispatchMap
+                zones={rankedZones.slice(0, 8)}
+                activeRiders={liveRidersData}
+                restaurants={restaurants}
+                focusedZoneId={focusedZone?.id ?? null}
+                focusedRiderId={selectedRiderId}
+                focusedRestaurantId={focusedRestaurant?.id ?? null}
+                onZoneSelect={(zoneId) => {
+                  setSelectedZoneId(zoneId);
+                  setSelectedRestaurantId(null);
+                }}
+                onRiderSelect={(riderId) => setSelectedRiderId(riderId)}
+                onRestaurantSelect={(restaurantId) => setSelectedRestaurantId(restaurantId)}
+              />
 
               <div className="relative mt-6 grid gap-3 md:grid-cols-3">
                 {hotZones.map((zone) => (
-                  <div key={zone.id} className={`rounded-2xl border px-4 py-3 ${zone.heat.panel}`}>
+                  <button
+                    key={zone.id}
+                    type="button"
+                    onClick={() => setSelectedZoneId(zone.id)}
+                    className={`rounded-2xl border px-4 py-3 text-left transition hover:border-white/25 ${zone.heat.panel} ${
+                      zone.id === focusedZone?.id ? "ring-2 ring-white/30" : ""
+                    }`}
+                  >
                     <p className="text-sm font-semibold text-white">{zone.zoneLabel}</p>
                     <p className="mt-1 text-xs text-slate-300">
                       Demand {zone.demandLevel}/10 · Supply {zone.supplyLevel}/10
@@ -340,7 +398,7 @@ export default function RidersPage() {
                         {zone.heat.label}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -364,7 +422,7 @@ export default function RidersPage() {
                   <div>
                     <p className="text-sm font-semibold text-white">{focusedZone?.zoneLabel ?? "Awaiting zone data"}</p>
                     <p className="text-xs text-slate-400">
-                      {focusedZone ? `${focusedZone.activeOrders} live orders in focus` : "No hot zone selected"}
+                      {focusedZone ? `${feedRows.length} live orders in focus` : "No hot zone selected"}
                     </p>
                   </div>
                 </div>
@@ -398,20 +456,26 @@ export default function RidersPage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-white">
-                        {focusedOrder?.delivery?.riderProfile?.user
+                        {selectedLiveRider?.user
+                          ? formatRiderName(selectedLiveRider.user)
+                          : focusedOrder?.delivery?.riderProfile?.user
                           ? formatRiderName(focusedOrder.delivery.riderProfile.user)
                           : nearbyRiders[0]?.user
                             ? formatRiderName(nearbyRiders[0].user)
-                            : focusedRider
-                              ? formatRiderName(focusedRider.riderProfile?.user)
+                            : focusedQualitySignal
+                              ? formatRiderName(focusedQualitySignal.riderProfile?.user)
                               : "Dispatch pool"}
                       </p>
                       <p className="text-xs text-slate-400">
-                        {focusedOrder?.delivery?.riderProfile?.user
+                        {selectedLiveRider
+                          ? selectedLiveRider.activeDelivery?.restaurantName
+                            ? `On delivery for ${selectedLiveRider.activeDelivery.restaurantName}`
+                            : "Available for assignment"
+                          : focusedOrder?.delivery?.riderProfile?.user
                           ? "Currently assigned to focused order"
                           : nearbyRiders[0]
                             ? `${nearbyRiders[0].restaurantDistanceKm} km from restaurant`
-                            : focusedRider?.scoreType ?? "Quality signal pending"}
+                            : focusedQualitySignal?.scoreType ?? "Quality signal pending"}
                       </p>
                     </div>
                   </div>
@@ -419,7 +483,7 @@ export default function RidersPage() {
 
                 <div className="rounded-2xl border border-slate-700 bg-slate-950/40 p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Focused order</p>
-                  <p className="mt-3 text-lg font-semibold text-white">{focusedOrder?.restaurant?.name ?? "No active order selected"}</p>
+                  <p className="mt-3 text-lg font-semibold text-white">{focusedRestaurant?.name ?? focusedOrder?.restaurant?.name ?? "No active order selected"}</p>
                   <p className="mt-1 text-sm text-slate-400">
                     {focusedOrder ? `${formatCustomerName(focusedOrder.customer)} · ${focusedOrder.status.replaceAll("_", " ")}` : "Waiting for live order activity"}
                   </p>

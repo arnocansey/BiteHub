@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import {
   BarChart2,
@@ -23,6 +24,11 @@ import { getAdminManagerTitle, hasAdminAccess } from "../lib/admin-access";
 import { adminRequest, useAdminData, useAdminSessionState } from "../lib/admin-client";
 import { isWithinAdminDateRange, parseAdminDateRange } from "../lib/admin-date-range";
 
+const GhanaDispatchMap = dynamic(
+  () => import("../components/ghana-dispatch-map").then((mod) => mod.GhanaDispatchMap),
+  { ssr: false }
+);
+
 type Overview = { users: number; orders: number; restaurants: number };
 type TrustOverview = {
   openSupportTickets: number;
@@ -40,7 +46,13 @@ type OperationsIntelligence = {
     restaurant?: { name?: string } | null;
     riderProfile?: { user?: { firstName?: string; lastName?: string } | null } | null;
   }>;
-  forecasts: Array<{ id: string; windowLabel: string; expectedOrders: number; confidencePercent: number; restaurant?: { name?: string } | null }>;
+  forecasts: Array<{
+    id: string;
+    windowLabel: string;
+    expectedOrders: number;
+    confidencePercent: number;
+    restaurant?: { name?: string } | null;
+  }>;
 };
 type SupportTicket = {
   id: string;
@@ -48,6 +60,27 @@ type SupportTicket = {
   severity: string;
   status: string;
   order?: { id?: string; restaurant?: { name?: string } };
+};
+type LiveRider = {
+  id: string;
+  isOnline: boolean;
+  vehicleType?: string | null;
+  currentLatitude: number;
+  currentLongitude: number;
+  user?: { firstName?: string; lastName?: string } | null;
+  activeDelivery?: {
+    id: string;
+    status: string;
+    orderId: string;
+    restaurantName?: string | null;
+  } | null;
+};
+type RestaurantRecord = {
+  id: string;
+  name: string;
+  address?: string | null;
+  averageRating?: number | null;
+  isFeatured?: boolean;
 };
 type Order = {
   id: string;
@@ -72,6 +105,7 @@ export default function HomePage() {
     window.addEventListener("bitehub-admin-range-change", handleRangeChange as EventListener);
     return () => window.removeEventListener("bitehub-admin-range-change", handleRangeChange as EventListener);
   }, []);
+
   const overviewQuery = useAdminData(() => adminRequest<Overview>("/admin/overview"), [session?.accessToken]);
   const ordersQuery = useAdminData(() => adminRequest<Order[]>("/admin/orders"), [session?.accessToken]);
   const approvalsQuery = useAdminData(
@@ -85,7 +119,10 @@ export default function HomePage() {
     },
     [session?.accessToken]
   );
-  const reportQuery = useAdminData(() => adminRequest<{ revenue: number; transactions: number }>("/admin/reports/revenue"), [session?.accessToken]);
+  const reportQuery = useAdminData(
+    () => adminRequest<{ revenue: number; transactions: number }>("/admin/reports/revenue"),
+    [session?.accessToken]
+  );
   const trustQuery = useAdminData(
     async () => {
       const [overview, tickets] = await Promise.all([
@@ -99,6 +136,14 @@ export default function HomePage() {
   );
   const opsQuery = useAdminData(
     () => adminRequest<OperationsIntelligence>("/admin/reports/operations"),
+    [session?.accessToken]
+  );
+  const liveRidersQuery = useAdminData(
+    () => adminRequest<LiveRider[]>("/admin/riders/live"),
+    [session?.accessToken]
+  );
+  const restaurantsQuery = useAdminData(
+    () => adminRequest<RestaurantRecord[]>("/admin/restaurants"),
     [session?.accessToken]
   );
 
@@ -117,25 +162,64 @@ export default function HomePage() {
       { label: "Delivered", value: delivered, icon: Package },
       { label: "Ready For Pickup", value: readyForPickup, icon: Bike },
       { label: "Active Orders", value: active, icon: BarChart2 },
-      { label: "Pending Approvals", value: (approvalsQuery.data?.vendors.length ?? 0) + (approvalsQuery.data?.riders.length ?? 0), icon: Star }
+      {
+        label: "Pending Approvals",
+        value: (approvalsQuery.data?.vendors.length ?? 0) + (approvalsQuery.data?.riders.length ?? 0),
+        icon: Star
+      }
     ];
-  }, [approvalsQuery.data, ordersQuery.data, overviewQuery.data, reportQuery.data]);
+  }, [activeRange, approvalsQuery.data, ordersQuery.data, overviewQuery.data, reportQuery.data]);
 
   if (!ready) return <LoadingCard />;
   if (!session) return <AuthRequiredCard message="Sign in with an admin account to load live BiteHub metrics." />;
   if (!hasAdminAccess(session, "overview")) {
     return <AccessDeniedCard message="This dashboard area is not available for your manager role." />;
   }
-  if (overviewQuery.loading || ordersQuery.loading || approvalsQuery.loading || reportQuery.loading || trustQuery.loading || opsQuery.loading) {
+  if (
+    overviewQuery.loading ||
+    ordersQuery.loading ||
+    approvalsQuery.loading ||
+    reportQuery.loading ||
+    trustQuery.loading ||
+    opsQuery.loading ||
+    liveRidersQuery.loading ||
+    restaurantsQuery.loading
+  ) {
     return <LoadingCard />;
   }
-  if (overviewQuery.error || ordersQuery.error || approvalsQuery.error || reportQuery.error || trustQuery.error || opsQuery.error) {
-    return <ErrorCard message={overviewQuery.error ?? ordersQuery.error ?? approvalsQuery.error ?? reportQuery.error ?? trustQuery.error ?? opsQuery.error ?? "Unable to load the dashboard."} />;
+  if (
+    overviewQuery.error ||
+    ordersQuery.error ||
+    approvalsQuery.error ||
+    reportQuery.error ||
+    trustQuery.error ||
+    opsQuery.error ||
+    liveRidersQuery.error ||
+    restaurantsQuery.error
+  ) {
+    return (
+      <ErrorCard
+        message={
+          overviewQuery.error ??
+          ordersQuery.error ??
+          approvalsQuery.error ??
+          reportQuery.error ??
+          trustQuery.error ??
+          opsQuery.error ??
+          liveRidersQuery.error ??
+          restaurantsQuery.error ??
+          "Unable to load the dashboard."
+        }
+      />
+    );
   }
 
   const orders = (ordersQuery.data ?? []).filter((order) => isWithinAdminDateRange(order.placedAt, activeRange));
   const topOrders = orders.slice(0, 6);
   const managerTitle = getAdminManagerTitle(session);
+  const topHeatZones = (opsQuery.data?.heatmap ?? []).slice(0, 6);
+  const liveRiders = liveRidersQuery.data ?? [];
+  const restaurants = (restaurantsQuery.data ?? []).slice(0, 12);
 
   return (
     <DashboardShell
@@ -169,12 +253,17 @@ export default function HomePage() {
                     <div>
                       <p className="font-medium text-slate-900">{order.id}</p>
                       <p className="mt-1 text-sm text-slate-500">
-                        {(order.customer?.firstName ?? "Customer") + " " + (order.customer?.lastName ?? "")} • {order.restaurant?.name ?? "Restaurant"}
+                        {(order.customer?.firstName ?? "Customer") + " " + (order.customer?.lastName ?? "")} •{" "}
+                        {order.restaurant?.name ?? "Restaurant"}
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-slate-900">GHS {Number(order.totalAmount ?? 0).toLocaleString()}</p>
-                      <p className="mt-1 text-xs font-semibold text-orange-500">{order.status.replaceAll("_", " ")}</p>
+                      <p className="text-sm font-semibold text-slate-900">
+                        GHS {Number(order.totalAmount ?? 0).toLocaleString()}
+                      </p>
+                      <p className="mt-1 text-xs font-semibold text-orange-500">
+                        {order.status.replaceAll("_", " ")}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -215,7 +304,9 @@ export default function HomePage() {
       <section className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
           <h2 className="text-xl font-semibold text-slate-900">Trust and recovery queue</h2>
-          <p className="text-sm text-slate-500">Low-confidence ETAs: {trustQuery.data?.overview.lowConfidenceEtas ?? 0}</p>
+          <p className="text-sm text-slate-500">
+            Low-confidence ETAs: {trustQuery.data?.overview.lowConfidenceEtas ?? 0}
+          </p>
         </div>
         {(trustQuery.data?.tickets.length ?? 0) > 0 ? (
           <div className="mt-6 space-y-3">
@@ -224,7 +315,9 @@ export default function HomePage() {
                 <div className="flex items-center justify-between gap-4">
                   <div>
                     <p className="font-medium text-slate-900">{ticket.subject}</p>
-                    <p className="mt-1 text-sm text-slate-500">{ticket.order?.id ?? "Order"} • {ticket.order?.restaurant?.name ?? "Restaurant"}</p>
+                    <p className="mt-1 text-sm text-slate-500">
+                      {ticket.order?.id ?? "Order"} • {ticket.order?.restaurant?.name ?? "Restaurant"}
+                    </p>
                   </div>
                   <div className="text-right">
                     <p className="text-xs font-semibold uppercase text-orange-500">{ticket.severity}</p>
@@ -239,25 +332,41 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_1fr_1fr]">
+      <section className="grid gap-4 xl:grid-cols-[1.35fr_1fr_1fr]">
         <article className="rounded-3xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-slate-900">Demand heatmap</h2>
-            <p className="text-sm text-slate-500">{opsQuery.data?.activeRiderIncentives ?? 0} active rider incentives</p>
+            <p className="text-sm text-slate-500">
+              {opsQuery.data?.activeRiderIncentives ?? 0} active rider incentives
+            </p>
           </div>
-          <div className="mt-6 space-y-3">
-            {(opsQuery.data?.heatmap ?? []).slice(0, 4).map((zone) => (
-              <div key={zone.id} className="rounded-2xl bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="font-medium text-slate-900">{zone.zoneLabel}</p>
-                    <p className="mt-1 text-sm text-slate-500">Demand {zone.demandLevel}/10 • Supply {zone.supplyLevel}/10</p>
+          {topHeatZones.length ? (
+            <>
+              <GhanaDispatchMap
+                zones={topHeatZones}
+                activeRiders={liveRiders}
+                restaurants={restaurants}
+                focusedZoneId={topHeatZones[0]?.id ?? null}
+              />
+              <div className="mt-4 space-y-3">
+                {topHeatZones.slice(0, 3).map((zone) => (
+                  <div key={zone.id} className="rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="font-medium text-slate-900">{zone.zoneLabel}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          Demand {zone.demandLevel}/10 • Supply {zone.supplyLevel}/10
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-orange-500">{zone.activeOrders} live orders</p>
+                    </div>
                   </div>
-                  <p className="text-sm font-semibold text-orange-500">{zone.activeOrders} live orders</p>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </>
+          ) : (
+            <EmptyCard message="No heatmap zones are available yet." />
+          )}
         </article>
 
         <article className="rounded-3xl bg-white p-6 shadow-sm">
@@ -267,7 +376,9 @@ export default function HomePage() {
               <div key={forecast.id} className="rounded-2xl bg-slate-50 p-4">
                 <p className="font-medium text-slate-900">{forecast.restaurant?.name ?? "Restaurant"}</p>
                 <p className="mt-1 text-sm text-slate-500">{forecast.windowLabel}</p>
-                <p className="mt-3 text-sm font-semibold text-orange-500">{forecast.expectedOrders} expected orders • {forecast.confidencePercent}% confidence</p>
+                <p className="mt-3 text-sm font-semibold text-orange-500">
+                  {forecast.expectedOrders} expected orders • {forecast.confidencePercent}% confidence
+                </p>
               </div>
             ))}
           </div>
@@ -278,9 +389,14 @@ export default function HomePage() {
           <div className="mt-6 space-y-3">
             {(opsQuery.data?.qualityScores ?? []).slice(0, 4).map((score) => (
               <div key={score.id} className="rounded-2xl bg-slate-50 p-4">
-                <p className="font-medium text-slate-900">{score.restaurant?.name ?? score.riderProfile?.user?.firstName ?? score.scoreType}</p>
+                <p className="font-medium text-slate-900">
+                  {score.restaurant?.name ?? score.riderProfile?.user?.firstName ?? score.scoreType}
+                </p>
                 <p className="mt-1 text-sm text-slate-500">{score.scoreType}</p>
-                <p className="mt-3 text-sm font-semibold text-orange-500">{Number(score.scoreValue ?? 0).toFixed(1)} {score.trend ? `• ${score.trend}` : ""}</p>
+                <p className="mt-3 text-sm font-semibold text-orange-500">
+                  {Number(score.scoreValue ?? 0).toFixed(1)}
+                  {score.trend ? ` • ${score.trend}` : ""}
+                </p>
               </div>
             ))}
           </div>

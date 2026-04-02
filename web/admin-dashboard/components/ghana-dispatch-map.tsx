@@ -26,6 +26,14 @@ type ActiveRider = {
   } | null;
 };
 
+type RestaurantMarker = {
+  id: string;
+  name: string;
+  address?: string | null;
+  averageRating?: number | null;
+  isFeatured?: boolean;
+};
+
 const ghanaZoneCoordinates = [
   { keywords: ["accra", "osu", "airport", "cantonments", "labone"], lat: 5.5607, lng: -0.2057 },
   { keywords: ["tema", "spintex", "sakumono", "ashaiman"], lat: 5.6698, lng: -0.0166 },
@@ -57,7 +65,7 @@ function getZoneStyle(zone: HeatZone) {
   return { fill: "#34d399", stroke: "#6ee7b7", label: "Balanced" };
 }
 
-function getZoneCoordinates(zoneLabel: string, index: number) {
+export function getZoneCoordinates(zoneLabel: string, index: number) {
   const normalized = zoneLabel.toLowerCase();
   const matched = ghanaZoneCoordinates.find((entry) => entry.keywords.some((keyword) => normalized.includes(keyword)));
   if (matched) return { lat: matched.lat, lng: matched.lng };
@@ -77,11 +85,23 @@ function getZoneCoordinates(zoneLabel: string, index: number) {
 export function GhanaDispatchMap({
   zones,
   activeRiders,
-  focusedZoneId
+  restaurants,
+  focusedZoneId,
+  focusedRiderId,
+  focusedRestaurantId,
+  onZoneSelect,
+  onRiderSelect,
+  onRestaurantSelect
 }: {
   zones: HeatZone[];
   activeRiders: ActiveRider[];
+  restaurants?: RestaurantMarker[];
   focusedZoneId?: string | null;
+  focusedRiderId?: string | null;
+  focusedRestaurantId?: string | null;
+  onZoneSelect?: (zoneId: string | null) => void;
+  onRiderSelect?: (riderId: string | null) => void;
+  onRestaurantSelect?: (restaurantId: string | null) => void;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -147,15 +167,19 @@ export function GhanaDispatchMap({
         }
       );
 
+      marker.on("click", () => {
+        onZoneSelect?.(zone.id);
+      });
+
       marker.addTo(layerGroup);
     });
 
     activeRiders.forEach((rider) => {
       const riderName = [rider.user?.firstName, rider.user?.lastName].filter(Boolean).join(" ").trim() || "Active rider";
       const marker = L.circleMarker([rider.currentLatitude, rider.currentLongitude], {
-        radius: 6,
+        radius: rider.id === focusedRiderId ? 8 : 6,
         color: "#38bdf8",
-        weight: 2,
+        weight: rider.id === focusedRiderId ? 3 : 2,
         fillColor: "#0ea5e9",
         fillOpacity: 0.95
       });
@@ -172,9 +196,79 @@ export function GhanaDispatchMap({
         }
       );
 
+      marker.on("click", () => {
+        onRiderSelect?.(rider.id);
+      });
+
       marker.addTo(layerGroup);
     });
-  }, [activeRiders, focusedZoneId, zones]);
+
+    (restaurants ?? []).forEach((restaurant, index) => {
+      const sourceLabel = `${restaurant.address ?? ""} ${restaurant.name}`.trim();
+      const coords = getZoneCoordinates(sourceLabel || restaurant.name, index);
+      const marker = L.circleMarker([coords.lat, coords.lng], {
+        radius: restaurant.id === focusedRestaurantId ? 7 : 5,
+        color: restaurant.isFeatured ? "#f59e0b" : "#a855f7",
+        weight: restaurant.id === focusedRestaurantId ? 3 : 2,
+        fillColor: restaurant.isFeatured ? "#fbbf24" : "#c084fc",
+        fillOpacity: 0.9
+      });
+
+      marker.bindTooltip(
+        `<div style="min-width: 160px;">
+          <div style="font-weight:700; margin-bottom:4px;">${restaurant.name}</div>
+          <div style="font-size:12px; color:#cbd5e1;">${restaurant.address ?? "Address pending"}</div>
+          <div style="font-size:12px; color:#cbd5e1;">${restaurant.averageRating ? `Rating ${restaurant.averageRating.toFixed(1)}` : "Rating pending"}</div>
+        </div>`,
+        {
+          direction: "top",
+          offset: [0, -6]
+        }
+      );
+
+      marker.on("click", () => {
+        onRestaurantSelect?.(restaurant.id);
+      });
+
+      marker.addTo(layerGroup);
+    });
+  }, [
+    activeRiders,
+    focusedRestaurantId,
+    focusedRiderId,
+    focusedZoneId,
+    onRestaurantSelect,
+    onRiderSelect,
+    onZoneSelect,
+    restaurants,
+    zones
+  ]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    const focusedRider = activeRiders.find((rider) => rider.id === focusedRiderId);
+    if (focusedRider) {
+      map.flyTo([focusedRider.currentLatitude, focusedRider.currentLongitude], Math.max(map.getZoom(), 8), { duration: 0.35 });
+      return;
+    }
+
+    const focusedRestaurant = (restaurants ?? []).find((restaurant) => restaurant.id === focusedRestaurantId);
+    if (focusedRestaurant) {
+      const restaurantIndex = (restaurants ?? []).findIndex((restaurant) => restaurant.id === focusedRestaurantId);
+      const coords = getZoneCoordinates(`${focusedRestaurant.address ?? ""} ${focusedRestaurant.name}`.trim(), Math.max(0, restaurantIndex));
+      map.flyTo([coords.lat, coords.lng], Math.max(map.getZoom(), 8), { duration: 0.35 });
+      return;
+    }
+
+    const focusedZone = zones.find((zone) => zone.id === focusedZoneId);
+    if (focusedZone) {
+      const zoneIndex = zones.findIndex((zone) => zone.id === focusedZoneId);
+      const coords = getZoneCoordinates(focusedZone.zoneLabel, Math.max(0, zoneIndex));
+      map.flyTo([coords.lat, coords.lng], Math.max(map.getZoom(), 7), { duration: 0.35 });
+    }
+  }, [activeRiders, focusedRestaurantId, focusedRiderId, focusedZoneId, restaurants, zones]);
 
   return (
     <div className="relative mt-6 overflow-hidden rounded-[28px] border border-slate-700 bg-[#07101d]">
@@ -187,6 +281,7 @@ export function GhanaDispatchMap({
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-orange-400" /> Warm zone</span>
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Balanced</span>
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-sky-500" /> Active riders</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-violet-400" /> Restaurants</span>
         </div>
       </div>
     </div>
