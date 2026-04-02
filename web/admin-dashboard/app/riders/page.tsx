@@ -65,6 +65,7 @@ function getZoneHeat(zone: { demandLevel: number; supplyLevel: number; activeOrd
     return {
       label: "Red zone",
       dot: "bg-rose-500",
+      svgFill: "#f43f5e",
       glow: "shadow-[0_0_0_14px_rgba(244,63,94,0.16)]",
       chip: "bg-rose-500/15 text-rose-200",
       panel: "border-rose-500/35 bg-rose-500/10"
@@ -74,6 +75,7 @@ function getZoneHeat(zone: { demandLevel: number; supplyLevel: number; activeOrd
     return {
       label: "Warm zone",
       dot: "bg-orange-400",
+      svgFill: "#fb923c",
       glow: "shadow-[0_0_0_14px_rgba(251,146,60,0.16)]",
       chip: "bg-orange-400/15 text-orange-200",
       panel: "border-orange-400/30 bg-orange-400/10"
@@ -82,10 +84,43 @@ function getZoneHeat(zone: { demandLevel: number; supplyLevel: number; activeOrd
   return {
     label: "Balanced",
     dot: "bg-emerald-400",
+    svgFill: "#34d399",
     glow: "shadow-[0_0_0_14px_rgba(16,185,129,0.14)]",
     chip: "bg-emerald-400/15 text-emerald-200",
     panel: "border-emerald-400/25 bg-emerald-400/10"
   };
+}
+
+const ghanaMapAnchors = [
+  { keywords: ["accra", "osu", "airport", "cantonments", "labone"], x: 59, y: 84 },
+  { keywords: ["tema", "spintex", "sakumono", "ashaiman"], x: 66, y: 83 },
+  { keywords: ["kasoa", "weija", "mallam"], x: 50, y: 82 },
+  { keywords: ["madina", "east legon", "adenta", "legon"], x: 61, y: 78 },
+  { keywords: ["kumasi", "suame", "asokwa", "knust"], x: 46, y: 57 },
+  { keywords: ["cape coast", "takoradi", "sekondi", "western"], x: 26, y: 72 },
+  { keywords: ["sunyani", "brong", "ahafo"], x: 36, y: 60 },
+  { keywords: ["ho", "volta", "hohoe"], x: 68, y: 66 },
+  { keywords: ["koforidua", "eastern"], x: 57, y: 69 },
+  { keywords: ["tamale", "northern"], x: 49, y: 33 },
+  { keywords: ["bolgatanga", "upper east"], x: 55, y: 16 },
+  { keywords: ["wa", "upper west"], x: 28, y: 23 }
+] as const;
+
+function getGhanaZoneAnchor(zoneLabel: string, index: number) {
+  const normalized = zoneLabel.toLowerCase();
+  const matched = ghanaMapAnchors.find((anchor) => anchor.keywords.some((keyword) => normalized.includes(keyword)));
+  if (matched) return matched;
+
+  const fallbackAnchors = [
+    { x: 59, y: 84 },
+    { x: 46, y: 57 },
+    { x: 49, y: 33 },
+    { x: 26, y: 72 },
+    { x: 68, y: 66 },
+    { x: 36, y: 60 }
+  ];
+
+  return fallbackAnchors[index % fallbackAnchors.length];
 }
 
 export default function RidersPage() {
@@ -287,39 +322,65 @@ export default function RidersPage() {
             <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.12)_1px,transparent_1px)] [background-size:48px_48px]" />
 
             <div className="relative h-full min-h-[540px] rounded-[28px] border border-slate-700 bg-[linear-gradient(180deg,rgba(15,23,42,0.65),rgba(2,6,23,0.85))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] xl:min-h-[600px] 2xl:min-h-[720px]">
-              {rankedZones.slice(0, 6).map((zone, index) => {
-                const heat = getZoneHeat(zone);
-                const positions = [
-                  "left-[12%] top-[22%]",
-                  "left-[28%] top-[34%]",
-                  "left-[43%] top-[48%]",
-                  "left-[63%] top-[26%]",
-                  "left-[74%] top-[60%]",
-                  "left-[58%] top-[72%]"
-                ];
-
-                return (
-                  <div
-                    key={zone.id}
-                    className={`absolute h-3.5 w-3.5 rounded-full ${positions[index] ?? "left-[20%] top-[20%]"} ${heat.dot} ${heat.glow}`}
-                  />
-                );
-              })}
-
-              <svg className="absolute inset-0 h-full w-full opacity-60" viewBox="0 0 1000 800" preserveAspectRatio="none">
-                <path d="M40 600 C180 560, 220 430, 340 410 S580 380, 660 520 820 690, 960 620" fill="none" stroke="rgba(226,232,240,0.22)" strokeWidth="8" />
-                <path d="M80 180 C180 220, 300 260, 360 340 S540 460, 700 390 860 240, 920 120" fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="6" />
-                <path d="M110 90 C220 200, 260 310, 300 460 S420 670, 640 690 850 560, 900 420" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="5" />
-                <path d="M240 120 C280 180, 340 220, 420 240 S590 250, 650 300 700 430, 760 500" fill="none" stroke="rgba(16,185,129,0.18)" strokeWidth="4" />
-              </svg>
+              <div className="absolute inset-0 opacity-40 [background-image:linear-gradient(rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(90deg,rgba(148,163,184,0.08)_1px,transparent_1px)] [background-size:48px_48px]" />
 
               <div className="relative flex items-center justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-400">Fleet map</p>
-                  <h3 className="mt-1 text-xl font-semibold text-white">Dispatch pressure map</h3>
+                  <h3 className="mt-1 text-xl font-semibold text-white">Ghana dispatch pressure map</h3>
+                  <p className="mt-2 text-sm text-slate-400">Demand hotspots are projected onto Ghana dispatch zones so ops can nudge riders toward real pressure areas.</p>
                 </div>
                 <div className={`rounded-2xl border px-3 py-2 text-sm text-slate-200 ${focusedZoneHeat?.panel ?? "border-slate-700 bg-slate-900/70"}`}>
                   {focusedZone ? focusedZone.zoneLabel : "No active zone"}
+                </div>
+              </div>
+
+              <div className="relative mt-6 overflow-hidden rounded-[28px] border border-slate-700 bg-[#07101d] p-4">
+                <svg className="h-[360px] w-full md:h-[440px] xl:h-[500px]" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet">
+                  <defs>
+                    <linearGradient id="ghanaFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stopColor="rgba(15,23,42,0.98)" />
+                      <stop offset="100%" stopColor="rgba(30,41,59,0.95)" />
+                    </linearGradient>
+                  </defs>
+
+                  <path
+                    d="M34 3 L47 6 L60 10 L71 17 L79 26 L82 36 L80 48 L77 59 L79 73 L76 84 L68 95 L58 97 L50 94 L43 88 L38 80 L33 70 L29 58 L26 45 L24 32 L26 20 L31 11 Z"
+                    fill="url(#ghanaFill)"
+                    stroke="rgba(251,146,60,0.5)"
+                    strokeWidth="1.2"
+                  />
+
+                  <path d="M37 16 L46 28 L50 45 L48 58 L45 72" fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="0.8" />
+                  <path d="M52 14 L58 28 L61 46 L60 64 L57 82" fill="none" stroke="rgba(148,163,184,0.18)" strokeWidth="0.8" />
+                  <path d="M30 40 L44 43 L58 45 L76 44" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="0.8" />
+                  <path d="M33 62 L48 64 L64 67 L77 70" fill="none" stroke="rgba(148,163,184,0.16)" strokeWidth="0.8" />
+
+                  {rankedZones.slice(0, 8).map((zone, index) => {
+                    const heat = getZoneHeat(zone);
+                    const anchor = getGhanaZoneAnchor(zone.zoneLabel, index);
+                    const pulseColor =
+                      heat.label === "Red zone" ? "rgba(244,63,94,0.22)" : heat.label === "Warm zone" ? "rgba(251,146,60,0.22)" : "rgba(16,185,129,0.2)";
+
+                    return (
+                      <g key={zone.id}>
+                        <circle cx={anchor.x} cy={anchor.y} r="5.8" fill={pulseColor} />
+                        <circle cx={anchor.x} cy={anchor.y} r="2.2" fill={heat.svgFill} />
+                        <text x={anchor.x + 3} y={anchor.y - 3.5} fill="rgba(241,245,249,0.92)" fontSize="2.6" fontWeight="700">
+                          {zone.zoneLabel}
+                        </text>
+                      </g>
+                    );
+                  })}
+                </svg>
+
+                <div className="absolute bottom-4 left-4 rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-3 backdrop-blur">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Heat key</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-200">
+                    <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Red zone</span>
+                    <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-orange-400" /> Warm zone</span>
+                    <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Balanced</span>
+                  </div>
                 </div>
               </div>
 
