@@ -31,6 +31,7 @@ router.patch("/orders/:orderId/assign-rider", validate(assignRiderSchema), async
 router.get("/vendors/pending", asyncHandler(adminController.pendingVendors));
 router.patch("/vendors/:vendorId/approve", asyncHandler(adminController.approveVendor));
 router.get("/riders/pending", asyncHandler(adminController.pendingRiders));
+router.get("/riders/live", asyncHandler(adminController.liveRiders));
 router.patch("/riders/:riderId/approve", asyncHandler(adminController.approveRider));
 router.get("/categories", asyncHandler(adminController.categories));
 router.get("/restaurants", asyncHandler(adminController.restaurantsCatalog));

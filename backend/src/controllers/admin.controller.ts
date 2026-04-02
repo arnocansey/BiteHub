@@ -477,11 +477,56 @@ export const adminController = {
   },
 
   async pendingRiders(_req: Request, res: Response) {
-    const riders = await prisma.riderProfile.findMany({
+    const riders: any[] = await prisma.riderProfile.findMany({
       where: { approvalStatus: ApprovalStatus.PENDING },
       include: { user: true }
     });
     res.json(riders);
+  },
+
+  async liveRiders(_req: Request, res: Response) {
+    const riders = await prisma.riderProfile.findMany({
+      where: {
+        approvalStatus: ApprovalStatus.APPROVED,
+        isOnline: true,
+        currentLatitude: { not: null },
+        currentLongitude: { not: null }
+      },
+      include: {
+        user: true,
+        deliveries: {
+          where: {
+            status: { in: [DeliveryStatus.ASSIGNED, DeliveryStatus.PICKED_UP, DeliveryStatus.IN_TRANSIT] }
+          },
+          include: {
+            order: {
+              include: {
+                restaurant: true
+              }
+            }
+          }
+        }
+      }
+    } as any);
+
+    res.json(
+      riders.map((rider: any) => ({
+        id: rider.id,
+        isOnline: rider.isOnline,
+        vehicleType: rider.vehicleType,
+        currentLatitude: rider.currentLatitude,
+        currentLongitude: rider.currentLongitude,
+        user: rider.user,
+        activeDelivery: rider.deliveries[0]
+          ? {
+              id: rider.deliveries[0].id,
+              status: rider.deliveries[0].status,
+              orderId: rider.deliveries[0].orderId,
+              restaurantName: rider.deliveries[0].order?.restaurant?.name ?? null
+            }
+          : null
+      }))
+    );
   },
 
   async orders(_req: Request, res: Response) {

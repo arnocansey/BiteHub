@@ -55,6 +55,21 @@ type NearbyRider = {
   user?: { firstName?: string; lastName?: string } | null;
 };
 
+type LiveRider = {
+  id: string;
+  isOnline: boolean;
+  vehicleType?: string | null;
+  currentLatitude: number;
+  currentLongitude: number;
+  user?: { firstName?: string; lastName?: string } | null;
+  activeDelivery?: {
+    id: string;
+    status: string;
+    orderId: string;
+    restaurantName?: string | null;
+  } | null;
+};
+
 function formatRiderName(input?: { firstName?: string; lastName?: string } | null) {
   const full = [input?.firstName, input?.lastName].filter(Boolean).join(" ").trim();
   return full || "Unassigned rider";
@@ -98,13 +113,14 @@ export default function RidersPage() {
   const { session, ready } = useAdminSessionState();
   const query = useAdminData(
     async () => {
-      const [pendingRiders, ops, orders] = await Promise.all([
+      const [pendingRiders, ops, orders, liveRiders] = await Promise.all([
         adminRequest<RiderApproval[]>("/admin/riders/pending"),
         adminRequest<OperationsIntelligence>("/admin/reports/operations"),
-        adminRequest<AdminOrder[]>("/admin/orders")
+        adminRequest<AdminOrder[]>("/admin/orders"),
+        adminRequest<LiveRider[]>("/admin/riders/live")
       ]);
 
-      return { pendingRiders, ops, orders };
+      return { pendingRiders, ops, orders, liveRiders };
     },
     [session?.accessToken]
   );
@@ -117,6 +133,7 @@ export default function RidersPage() {
   const pendingRiders = query.data?.pendingRiders ?? [];
   const heatmap = query.data?.ops.heatmap ?? [];
   const orders = query.data?.orders ?? [];
+  const liveRidersData = query.data?.liveRiders ?? [];
   const riderQuality = (query.data?.ops.qualityScores ?? []).filter((score) => score.riderProfile?.user);
   const activeOrdersList = orders.filter((order) =>
     ["PENDING", "ACCEPTED", "PREPARING", "READY_FOR_PICKUP", "IN_TRANSIT"].includes(order.status)
@@ -306,7 +323,7 @@ export default function RidersPage() {
                 </div>
               </div>
 
-              <GhanaDispatchMap zones={rankedZones.slice(0, 8)} focusedZoneId={focusedZone?.id ?? null} />
+              <GhanaDispatchMap zones={rankedZones.slice(0, 8)} activeRiders={liveRidersData} focusedZoneId={focusedZone?.id ?? null} />
 
               <div className="relative mt-6 grid gap-3 md:grid-cols-3">
                 {hotZones.map((zone) => (

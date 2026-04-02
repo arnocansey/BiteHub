@@ -11,6 +11,21 @@ type HeatZone = {
   activeOrders: number;
 };
 
+type ActiveRider = {
+  id: string;
+  isOnline: boolean;
+  vehicleType?: string | null;
+  currentLatitude: number;
+  currentLongitude: number;
+  user?: { firstName?: string; lastName?: string } | null;
+  activeDelivery?: {
+    id: string;
+    status: string;
+    orderId: string;
+    restaurantName?: string | null;
+  } | null;
+};
+
 const ghanaZoneCoordinates = [
   { keywords: ["accra", "osu", "airport", "cantonments", "labone"], lat: 5.5607, lng: -0.2057 },
   { keywords: ["tema", "spintex", "sakumono", "ashaiman"], lat: 5.6698, lng: -0.0166 },
@@ -61,9 +76,11 @@ function getZoneCoordinates(zoneLabel: string, index: number) {
 
 export function GhanaDispatchMap({
   zones,
+  activeRiders,
   focusedZoneId
 }: {
   zones: HeatZone[];
+  activeRiders: ActiveRider[];
   focusedZoneId?: string | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -132,7 +149,32 @@ export function GhanaDispatchMap({
 
       marker.addTo(layerGroup);
     });
-  }, [focusedZoneId, zones]);
+
+    activeRiders.forEach((rider) => {
+      const riderName = [rider.user?.firstName, rider.user?.lastName].filter(Boolean).join(" ").trim() || "Active rider";
+      const marker = L.circleMarker([rider.currentLatitude, rider.currentLongitude], {
+        radius: 6,
+        color: "#38bdf8",
+        weight: 2,
+        fillColor: "#0ea5e9",
+        fillOpacity: 0.95
+      });
+
+      marker.bindTooltip(
+        `<div style="min-width: 160px;">
+          <div style="font-weight:700; margin-bottom:4px;">${riderName}</div>
+          <div style="font-size:12px; color:#cbd5e1;">${rider.vehicleType ?? "Rider"} · Online</div>
+          <div style="font-size:12px; color:#cbd5e1;">${rider.activeDelivery?.restaurantName ? `On delivery for ${rider.activeDelivery.restaurantName}` : "Available for assignment"}</div>
+        </div>`,
+        {
+          direction: "top",
+          offset: [0, -6]
+        }
+      );
+
+      marker.addTo(layerGroup);
+    });
+  }, [activeRiders, focusedZoneId, zones]);
 
   return (
     <div className="relative mt-6 overflow-hidden rounded-[28px] border border-slate-700 bg-[#07101d]">
@@ -144,6 +186,7 @@ export function GhanaDispatchMap({
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Red zone</span>
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-orange-400" /> Warm zone</span>
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Balanced</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-sky-500" /> Active riders</span>
         </div>
       </div>
     </div>
