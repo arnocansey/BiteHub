@@ -28,6 +28,9 @@ type Settings = {
   riderCommissionRate: number | string;
   serviceFeeRate: number | string;
   taxRate: number | string;
+  rideBaseFare: number | string;
+  rideDistanceRatePerKm: number | string;
+  rideTimeRatePerMinute: number | string;
   payoutDelayDays: number;
   minimumPayoutAmount: number | string;
   platformSubscriptionEnabled: boolean;
@@ -68,6 +71,9 @@ export default function SettingsPage() {
   const [riderCommissionRate, setRiderCommissionRate] = useState("2.5");
   const [serviceFeeRate, setServiceFeeRate] = useState("5");
   const [taxRate, setTaxRate] = useState("7.5");
+  const [rideBaseFare, setRideBaseFare] = useState("5");
+  const [rideDistanceRatePerKm, setRideDistanceRatePerKm] = useState("2");
+  const [rideTimeRatePerMinute, setRideTimeRatePerMinute] = useState("0.5");
   const [payoutDelayDays, setPayoutDelayDays] = useState("2");
   const [minimumPayoutAmount, setMinimumPayoutAmount] = useState("5000");
   const [platformSubscriptionEnabled, setPlatformSubscriptionEnabled] = useState(true);
@@ -85,6 +91,9 @@ export default function SettingsPage() {
     setRiderCommissionRate(String(query.data.riderCommissionRate));
     setServiceFeeRate(String(query.data.serviceFeeRate));
     setTaxRate(String(query.data.taxRate));
+    setRideBaseFare(String(query.data.rideBaseFare));
+    setRideDistanceRatePerKm(String(query.data.rideDistanceRatePerKm));
+    setRideTimeRatePerMinute(String(query.data.rideTimeRatePerMinute));
     setPayoutDelayDays(String(query.data.payoutDelayDays));
     setMinimumPayoutAmount(String(query.data.minimumPayoutAmount));
     setPlatformSubscriptionEnabled(query.data.platformSubscriptionEnabled);
@@ -102,9 +111,12 @@ export default function SettingsPage() {
       { label: "Platform order commission", value: `${vendorCommissionRate}%` },
       { label: "Delivery platform fee", value: `${riderCommissionRate}%` },
       { label: "Customer service fee", value: `${serviceFeeRate}%` },
-      { label: "Government tax / VAT", value: `${taxRate}%` }
+      { label: "Government tax / VAT", value: `${taxRate}%` },
+      { label: "Ride base fare", value: `GHS ${rideBaseFare}` },
+      { label: "Ride distance rate", value: `GHS ${rideDistanceRatePerKm}/km` },
+      { label: "Ride time rate", value: `GHS ${rideTimeRatePerMinute}/min` }
     ],
-    [riderCommissionRate, serviceFeeRate, taxRate, vendorCommissionRate]
+    [rideBaseFare, rideDistanceRatePerKm, rideTimeRatePerMinute, riderCommissionRate, serviceFeeRate, taxRate, vendorCommissionRate]
   );
 
   function togglePaymentMethod(method: Settings["paymentMethods"][number]) {
@@ -147,6 +159,9 @@ export default function SettingsPage() {
           riderCommissionRate: Number(riderCommissionRate),
           serviceFeeRate: Number(serviceFeeRate),
           taxRate: Number(taxRate),
+          rideBaseFare: Number(rideBaseFare),
+          rideDistanceRatePerKm: Number(rideDistanceRatePerKm),
+          rideTimeRatePerMinute: Number(rideTimeRatePerMinute),
           payoutDelayDays: Number(payoutDelayDays),
           minimumPayoutAmount: Number(minimumPayoutAmount),
           platformSubscriptionEnabled,
@@ -275,6 +290,42 @@ export default function SettingsPage() {
                   max="100"
                   value={taxRate}
                   onChange={(event) => setTaxRate(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-orange-300"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Ride base fare (GHS)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={rideBaseFare}
+                  onChange={(event) => setRideBaseFare(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-orange-300"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Ride distance rate (GHS / km)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={rideDistanceRatePerKm}
+                  onChange={(event) => setRideDistanceRatePerKm(event.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-orange-300"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-slate-700">Ride time rate (GHS / min)</span>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={rideTimeRatePerMinute}
+                  onChange={(event) => setRideTimeRatePerMinute(event.target.value)}
                   className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-sm outline-none transition focus:border-orange-300"
                 />
               </label>

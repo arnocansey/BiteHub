@@ -150,6 +150,9 @@ export default function RidersPage() {
   const [creatingCourier, setCreatingCourier] = useState(false);
   const [showCreateCourier, setShowCreateCourier] = useState(false);
   const [createCourierForm, setCreateCourierForm] = useState(emptyCourierForm);
+  const [messageTitle, setMessageTitle] = useState("Dispatch update");
+  const [messageBody, setMessageBody] = useState("");
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [editCourierForm, setEditCourierForm] = useState({
     firstName: "",
     lastName: "",
@@ -198,6 +201,7 @@ export default function RidersPage() {
       isOnline: selectedCourier.isOnline,
       isActive: selectedCourier.isActive
     });
+    setMessageBody("");
   }, [selectedCourier]);
 
   const filteredTrips = useMemo(() => {
@@ -261,6 +265,23 @@ export default function RidersPage() {
       await refreshAll();
     } finally {
       setCreatingCourier(false);
+    }
+  }
+
+  async function sendMessageToCourier() {
+    if (!selectedCourier || !messageTitle.trim() || !messageBody.trim()) return;
+    setSendingMessage(true);
+    try {
+      await adminRequest(`/admin/riders/${selectedCourier.id}/message`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: messageTitle,
+          body: messageBody
+        })
+      });
+      setMessageBody("");
+    } finally {
+      setSendingMessage(false);
     }
   }
 
@@ -650,6 +671,45 @@ export default function RidersPage() {
                     <ShieldBan className="h-4 w-4" />
                     {editCourierForm.isActive ? "Block courier" : "Unblock courier"}
                   </button>
+                </div>
+
+                <div className="rounded-3xl border border-slate-800 bg-slate-900/70 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">Admin communication</p>
+                  <h4 className="mt-2 text-lg font-semibold text-white">Message this rider</h4>
+                  <p className="mt-1 text-sm text-slate-400">
+                    Send a direct operational update to {selectedCourier.name}. The message is delivered through the rider notification inbox.
+                  </p>
+
+                  <div className="mt-4 space-y-3">
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-300">Message title</span>
+                      <input
+                        value={messageTitle}
+                        onChange={(event) => setMessageTitle(event.target.value)}
+                        className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
+                        placeholder="Dispatch update"
+                      />
+                    </label>
+
+                    <label className="block">
+                      <span className="mb-2 block text-sm font-semibold text-slate-300">Message body</span>
+                      <textarea
+                        value={messageBody}
+                        onChange={(event) => setMessageBody(event.target.value)}
+                        className="min-h-[120px] w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
+                        placeholder="Head to East Legon after your current trip. Demand is rising in that zone."
+                      />
+                    </label>
+
+                    <button
+                      type="button"
+                      disabled={sendingMessage || !messageTitle.trim() || !messageBody.trim()}
+                      onClick={() => void sendMessageToCourier()}
+                      className="rounded-2xl bg-sky-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-sky-400 disabled:opacity-60"
+                    >
+                      {sendingMessage ? "Sending..." : "Send rider message"}
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (

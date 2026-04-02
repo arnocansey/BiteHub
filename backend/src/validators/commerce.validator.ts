@@ -218,6 +218,9 @@ export const adminSettingsSchema = z.object({
   riderCommissionRate: z.number().min(0).max(100),
   serviceFeeRate: z.number().min(0).max(100),
   taxRate: z.number().min(0).max(100),
+  rideBaseFare: z.number().nonnegative(),
+  rideDistanceRatePerKm: z.number().nonnegative(),
+  rideTimeRatePerMinute: z.number().nonnegative(),
   payoutDelayDays: z.number().int().min(0).max(60),
   minimumPayoutAmount: z.number().nonnegative(),
   platformSubscriptionEnabled: z.boolean(),
@@ -239,6 +242,11 @@ export const adminSettingsSchema = z.object({
       })
     )
     .max(12)
+});
+
+export const adminRiderMessageSchema = z.object({
+  title: z.string().min(2).max(100),
+  body: z.string().min(2).max(500)
 });
 
 export const groupOrderSchema = z.object({

@@ -51,6 +51,9 @@ async function getPlatformSettingsRecord() {
       riderCommissionRate: "2.50",
       serviceFeeRate: "5.00",
       taxRate: "7.50",
+      rideBaseFare: "5.00",
+      rideDistanceRatePerKm: "2.00",
+      rideTimeRatePerMinute: "0.50",
       payoutDelayDays: 2,
       minimumPayoutAmount: "5000.00",
       platformSubscriptionEnabled: true,
@@ -1056,6 +1059,46 @@ export const adminController = {
     });
   },
 
+  async messageRider(req: Request, res: Response) {
+    const riderId = String(req.params.riderId);
+    const rider = await prisma.riderProfile.findUnique({
+      where: { id: riderId },
+      include: { user: true }
+    });
+
+    if (!rider) {
+      return res.status(404).json({ message: "Rider not found." });
+    }
+
+    const notification = await prisma.notification.create({
+      data: {
+        userId: rider.userId,
+        title: req.body.title,
+        body: req.body.body,
+        payload: {
+          type: "ADMIN_RIDER_MESSAGE",
+          riderId,
+          sentBy: req.user?.sub ?? null
+        }
+      }
+    });
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: "ADMIN_RIDER_MESSAGE_SENT",
+        entityType: "RIDER_PROFILE",
+        entityId: riderId,
+        metadata: {
+          title: req.body.title,
+          body: req.body.body
+        }
+      }
+    });
+
+    res.status(201).json({ sent: true, notification });
+  },
+
   async categories(_req: Request, res: Response) {
     const categories = await prisma.category.findMany({
       orderBy: { name: "asc" }
@@ -1580,6 +1623,9 @@ export const adminController = {
         riderCommissionRate: req.body.riderCommissionRate,
         serviceFeeRate: req.body.serviceFeeRate,
         taxRate: req.body.taxRate,
+        rideBaseFare: req.body.rideBaseFare,
+        rideDistanceRatePerKm: req.body.rideDistanceRatePerKm,
+        rideTimeRatePerMinute: req.body.rideTimeRatePerMinute,
         payoutDelayDays: req.body.payoutDelayDays,
         minimumPayoutAmount: req.body.minimumPayoutAmount,
         platformSubscriptionEnabled: req.body.platformSubscriptionEnabled,
@@ -1609,6 +1655,9 @@ export const adminController = {
         riderCommissionRate: req.body.riderCommissionRate,
         serviceFeeRate: req.body.serviceFeeRate,
         taxRate: req.body.taxRate,
+        rideBaseFare: req.body.rideBaseFare,
+        rideDistanceRatePerKm: req.body.rideDistanceRatePerKm,
+        rideTimeRatePerMinute: req.body.rideTimeRatePerMinute,
         payoutDelayDays: req.body.payoutDelayDays,
         minimumPayoutAmount: req.body.minimumPayoutAmount,
         platformSubscriptionEnabled: req.body.platformSubscriptionEnabled,

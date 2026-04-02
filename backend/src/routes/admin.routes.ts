@@ -10,6 +10,7 @@ import {
   adminCreateRiderSchema,
   adminPromoteUserSchema,
   adminReviewRiderSchema,
+  adminRiderMessageSchema,
   adminUpdateRiderSchema,
   assignRiderSchema,
   categorySchema,
@@ -40,6 +41,7 @@ router.get("/riders/live", asyncHandler(adminController.liveRiders));
 router.patch("/riders/:riderId/approve", asyncHandler(adminController.approveRider));
 router.patch("/riders/:riderId/review", validate(adminReviewRiderSchema), asyncHandler(adminController.reviewRider));
 router.patch("/riders/:riderId", validate(adminUpdateRiderSchema), asyncHandler(adminController.updateRider));
+router.post("/riders/:riderId/message", validate(adminRiderMessageSchema), asyncHandler(adminController.messageRider));
 router.get("/categories", asyncHandler(adminController.categories));
 router.get("/restaurants", asyncHandler(adminController.restaurantsCatalog));
 router.patch("/restaurants/:restaurantId/status", validate(restaurantStatusSchema), asyncHandler(adminController.updateRestaurantStatus));
