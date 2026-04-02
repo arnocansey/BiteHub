@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { ArrowDownRight, ArrowUpRight, CreditCard, Landmark, Search, Wallet } from "lucide-react";
 import { AccessDeniedCard, AuthRequiredCard, ErrorCard, LoadingCard } from "../../components/admin-states";
 import { DashboardShell } from "../../components/dashboard-shell";
 import { hasAdminAccess } from "../../lib/admin-access";
@@ -20,14 +21,11 @@ type RevenueReport = {
 type Order = {
   id: string;
   status: string;
-  subtotalAmount: number | string;
-  deliveryFee: number | string;
   totalAmount: number | string;
+  createdAt?: string;
   settlement?: {
     vendorPayoutAmount?: number | string;
     riderPayoutAmount?: number | string;
-    netPlatformRevenue?: number | string;
-    taxAmount?: number | string;
   } | null;
   restaurant?: { name?: string };
   delivery?: { riderProfile?: { user?: { firstName?: string; lastName?: string } } | null } | null;
@@ -43,10 +41,6 @@ type Settings = {
 };
 
 type SettlementPreview = {
-  settings: {
-    payoutDelayDays: number;
-    minimumPayoutAmount: number;
-  };
   summary: {
     eligibleVendorCount: number;
     eligibleRiderCount: number;
@@ -56,27 +50,6 @@ type SettlementPreview = {
     approvedRequestCount: number;
     approvedRequestAmount: number;
   };
-  vendors: Array<{
-    profileId: string;
-    payeeName: string;
-    contactName?: string;
-    totalAmount: number;
-    eligible: boolean;
-    payoutVerified?: boolean;
-    availableAmount?: number;
-    pendingAmount?: number;
-    approvedAmount?: number;
-  }>;
-  riders: Array<{
-    profileId: string;
-    payeeName: string;
-    totalAmount: number;
-    eligible: boolean;
-    vehicleType?: string;
-    availableAmount?: number;
-    pendingAmount?: number;
-    approvedAmount?: number;
-  }>;
   payoutRequests: {
     pending: Array<{
       id: string;
@@ -88,7 +61,6 @@ type SettlementPreview = {
       contactName?: string;
       createdAt: string;
       note?: string | null;
-      adminNote?: string | null;
     }>;
     approved: Array<{
       id: string;
@@ -103,8 +75,6 @@ type SettlementPreview = {
   };
   batches: Array<{
     id: string;
-    action: string;
-    entityId?: string | null;
     createdAt: string;
     metadata?: {
       target?: string;
@@ -115,11 +85,38 @@ type SettlementPreview = {
   }>;
 };
 
+function formatCurrency(value: number | string | null | undefined) {
+  return `GHS ${Number(value ?? 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
+
+function compactCurrency(value: number | string | null | undefined) {
+  const amount = Number(value ?? 0);
+  if (Math.abs(amount) >= 1000000) return `GHS ${(amount / 1000000).toFixed(1)}M`;
+  if (Math.abs(amount) >= 1000) return `GHS ${(amount / 1000).toFixed(1)}K`;
+  return formatCurrency(amount);
+}
+
+function initials(name: string) {
+  return (
+    name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase() ?? "")
+      .join("") || "BH"
+  );
+}
+
 export default function FinancePage() {
   const { session, ready } = useAdminSessionState();
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [creatingTarget, setCreatingTarget] = useState<string | null>(null);
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+
   const query = useAdminData(
     async () => {
       const [report, orders, settings, settlements] = await Promise.all([
@@ -133,6 +130,83 @@ export default function FinancePage() {
     [session?.accessToken]
   );
 
+  const report = query.data?.report;
+  const settings = query.data?.settings;
+  const settlements = query.data?.settlements;
+  const deliveredOrders = useMemo(
+    () => (Array.isArray(query.data?.orders) ? query.data?.orders.filter((order) => order.status === "DELIVERED") : []),
+    [query.data?.orders]
+  );
+  const vendorPayoutDue = settlements?.summary.vendorPayoutDue ?? 0;
+  const riderPayoutDue = settlements?.summary.riderPayoutDue ?? 0;
+  const netCashPosition = (report?.grossOrderValue ?? 0) - vendorPayoutDue - riderPayoutDue - (report?.taxPayable ?? 0);
+
+  const financeBars = useMemo(() => {
+    const rows = [
+      { label: "Gross", value: report?.grossOrderValue ?? 0, color: "bg-slate-500" },
+      { label: "Revenue", value: report?.revenue ?? 0, color: "bg-blue-500" },
+      { label: "Vendor", value: vendorPayoutDue, color: "bg-fuchsia-500" },
+      { label: "Rider", value: riderPayoutDue, color: "bg-cyan-500" },
+      { label: "Tax", value: report?.taxPayable ?? 0, color: "bg-amber-400" },
+      { label: "Net", value: Math.max(netCashPosition, 0), color: "bg-emerald-500" }
+    ];
+    const maxValue = Math.max(...rows.map((row) => row.value), 1);
+    return rows.map((row) => ({ ...row, height: Math.max((row.value / maxValue) * 100, 12) }));
+  }, [netCashPosition, report?.grossOrderValue, report?.revenue, report?.taxPayable, riderPayoutDue, vendorPayoutDue]);
+
+  const expenseSegments = useMemo(() => {
+    const rows = [
+      { label: "Vendor payouts", value: vendorPayoutDue, color: "#38bdf8" },
+      { label: "Rider payouts", value: riderPayoutDue, color: "#a855f7" },
+      { label: "Tax reserve", value: report?.taxPayable ?? 0, color: "#f59e0b" },
+      { label: "Service pool", value: report?.serviceFeeRevenue ?? 0, color: "#22c55e" }
+    ];
+    const total = rows.reduce((sum, row) => sum + row.value, 0);
+    let cursor = 0;
+    return rows.map((row) => {
+      const start = cursor;
+      const share = total > 0 ? (row.value / total) * 100 : 0;
+      cursor += share;
+      return { ...row, share, start, end: cursor };
+    });
+  }, [report?.serviceFeeRevenue, report?.taxPayable, riderPayoutDue, vendorPayoutDue]);
+
+  const activityRows = useMemo(() => {
+    const rows = [
+      ...(settlements?.payoutRequests.pending ?? []).map((request) => ({
+        id: request.id,
+        label: request.payeeName,
+        detail: request.contactName || request.targetType,
+        amount: request.requestedAmount,
+        status: request.status,
+        timestamp: request.createdAt
+      })),
+      ...(settlements?.payoutRequests.approved ?? []).map((request) => ({
+        id: request.id,
+        label: request.payeeName,
+        detail: request.contactName || request.targetType,
+        amount: request.approvedAmount || request.requestedAmount,
+        status: request.status,
+        timestamp: request.createdAt
+      })),
+      ...(settlements?.batches ?? []).map((batch) => ({
+        id: batch.id,
+        label: batch.metadata?.target ?? "Settlement batch",
+        detail: `Vendors ${batch.metadata?.vendorCount ?? 0} • Riders ${batch.metadata?.riderCount ?? 0}`,
+        amount: Number(batch.metadata?.totalAmount ?? 0),
+        status: "BATCHED",
+        timestamp: batch.createdAt
+      }))
+    ]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .filter((row) => {
+        if (!searchTerm.trim()) return true;
+        const haystack = `${row.label} ${row.detail} ${row.status}`.toLowerCase();
+        return haystack.includes(searchTerm.trim().toLowerCase());
+      });
+    return rows.slice(0, 8);
+  }, [searchTerm, settlements?.batches, settlements?.payoutRequests.approved, settlements?.payoutRequests.pending]);
+
   if (!ready) return <LoadingCard />;
   if (!session) return <AuthRequiredCard message="Sign in with an admin account to access finance operations." />;
   if (!hasAdminAccess(session, "finance")) {
@@ -140,13 +214,6 @@ export default function FinancePage() {
   }
   if (query.loading) return <LoadingCard label="Loading finance data..." />;
   if (query.error) return <ErrorCard message={query.error} />;
-
-  const report = query.data?.report;
-  const deliveredOrders = (query.data?.orders ?? []).filter((order) => order.status === "DELIVERED");
-  const settings = query.data?.settings;
-  const vendorPayoutDue = query.data?.settlements.summary.vendorPayoutDue ?? 0;
-  const riderPayoutDue = query.data?.settlements.summary.riderPayoutDue ?? 0;
-  const netCashPosition = (report?.grossOrderValue ?? 0) - vendorPayoutDue - riderPayoutDue - (report?.taxPayable ?? 0);
 
   async function createSettlementBatch(target: "VENDORS" | "RIDERS" | "ALL") {
     setCreatingTarget(target);
@@ -184,256 +251,297 @@ export default function FinancePage() {
 
   return (
     <DashboardShell
-      title="Finance and settlements"
-      description="Track BiteHub platform revenue, tax liability, and estimated payouts due to vendors and riders."
+      title="Finance manager"
+      description="Run BiteHub treasury from one dark command center using live payout, tax, settlement, and revenue data."
       session={session}
     >
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <article className="rounded-3xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Platform revenue</p>
-          <p className="mt-2 text-3xl font-black text-slate-900">GHS {(report?.revenue ?? 0).toLocaleString()}</p>
-        </article>
-        <article className="rounded-3xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Vendor payouts due</p>
-          <p className="mt-2 text-3xl font-black text-slate-900">GHS {vendorPayoutDue.toLocaleString()}</p>
-        </article>
-        <article className="rounded-3xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Rider payouts due</p>
-          <p className="mt-2 text-3xl font-black text-slate-900">GHS {riderPayoutDue.toLocaleString()}</p>
-        </article>
-        <article className="rounded-3xl bg-amber-50 p-5 shadow-sm ring-1 ring-amber-100">
-          <p className="text-sm text-amber-700">Tax liability</p>
-          <p className="mt-2 text-3xl font-black text-amber-900">GHS {(report?.taxPayable ?? 0).toLocaleString()}</p>
-        </article>
-      </section>
+      <section className="rounded-[34px] border border-white/10 bg-[#081120] p-4 shadow-[0_24px_80px_rgba(2,6,23,0.4)] md:p-6">
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.65fr)_360px]">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] border border-white/5 bg-[#0b1529] px-4 py-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-slate-500">BiteHub Treasury</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white">Finance command center</h2>
+              </div>
+              <label className="flex min-w-[260px] flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-[#09111f] px-4 py-3 text-slate-500 md:max-w-md">
+                <Search className="h-4 w-4" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Search requests, batches, payees..."
+                  className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                />
+              </label>
+            </div>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-black text-slate-900">Settlement settings</h2>
-          <div className="mt-5 space-y-3 text-sm text-slate-600">
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Platform order commission</span>
-              <strong>{settings?.vendorCommissionRate}%</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Delivery platform fee</span>
-              <strong>{settings?.riderCommissionRate}%</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Service fee</span>
-              <strong>{settings?.serviceFeeRate}%</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Payout delay</span>
-              <strong>{settings?.payoutDelayDays} days</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Minimum payout</span>
-              <strong>GHS {Number(settings?.minimumPayoutAmount ?? 0).toLocaleString()}</strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-black text-slate-900">Cash position</h2>
-          <div className="mt-5 space-y-3 text-sm text-slate-600">
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Gross captured value</span>
-              <strong>GHS {(report?.grossOrderValue ?? 0).toLocaleString()}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Transactions</span>
-              <strong>{report?.transactions ?? 0}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-3">
-              <span>Subscription revenue</span>
-              <strong>GHS {(report?.subscriptionRevenue ?? 0).toLocaleString()}</strong>
-            </div>
-            <div className="flex items-center justify-between rounded-2xl bg-slate-900 px-4 py-4 text-white">
-              <span>Estimated net cash after payouts and tax</span>
-              <strong>GHS {netCashPosition.toLocaleString()}</strong>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Settlement actions</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Create payout batches for verified vendors and active riders who have crossed the minimum payout threshold.
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <button type="button" onClick={() => void createSettlementBatch("VENDORS")} className="rounded-2xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600">
-              {creatingTarget === "VENDORS" ? "Creating..." : "Create vendor batch"}
-            </button>
-            <button type="button" onClick={() => void createSettlementBatch("RIDERS")} className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800">
-              {creatingTarget === "RIDERS" ? "Creating..." : "Create rider batch"}
-            </button>
-            <button type="button" onClick={() => void createSettlementBatch("ALL")} className="rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700">
-              {creatingTarget === "ALL" ? "Creating..." : "Create full batch"}
-            </button>
-          </div>
-        </div>
-        {actionMessage ? <div className="mt-4 rounded-2xl bg-orange-50 px-4 py-3 text-sm text-orange-600">{actionMessage}</div> : null}
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Eligible vendors</p>
-            <p className="mt-2 text-3xl font-black text-slate-900">{query.data?.settlements.summary.eligibleVendorCount ?? 0}</p>
-          </div>
-          <div className="rounded-2xl bg-slate-50 p-4">
-            <p className="text-sm text-slate-500">Eligible riders</p>
-            <p className="mt-2 text-3xl font-black text-slate-900">{query.data?.settlements.summary.eligibleRiderCount ?? 0}</p>
-          </div>
-          <div className="rounded-2xl bg-orange-50 p-4">
-            <p className="text-sm text-orange-600">Pending requests</p>
-            <p className="mt-2 text-3xl font-black text-orange-900">{query.data?.settlements.summary.pendingRequestCount ?? 0}</p>
-          </div>
-          <div className="rounded-2xl bg-emerald-50 p-4">
-            <p className="text-sm text-emerald-600">Approved requests ready for batch</p>
-            <p className="mt-2 text-3xl font-black text-emerald-900">
-              GHS {(query.data?.settlements.summary.approvedRequestAmount ?? 0).toLocaleString()}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-black text-slate-900">Pending payout approvals</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Vendors and riders must request their payout first. Only approved requests can be included in a settlement batch.
-            </p>
-          </div>
-          <div className="rounded-2xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-600">
-            {query.data?.settlements.payoutRequests.pending.length ?? 0} waiting for review
-          </div>
-        </div>
-        <div className="mt-5 space-y-3">
-          {(query.data?.settlements.payoutRequests.pending ?? []).length ? (
-            (query.data?.settlements.payoutRequests.pending ?? []).map((request) => (
-              <div key={request.id} className="flex flex-wrap items-center justify-between gap-4 rounded-2xl bg-slate-50 px-4 py-4">
-                <div>
-                  <p className="font-semibold text-slate-900">
-                    {request.payeeName} <span className="text-xs font-bold uppercase tracking-[0.2em] text-slate-400">{request.targetType}</span>
-                  </p>
-                  <p className="text-xs text-slate-500">{request.contactName || "No contact label"} • {new Date(request.createdAt).toLocaleString()}</p>
-                  {request.note ? <p className="mt-1 text-xs text-slate-500">Note: {request.note}</p> : null}
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(280px,0.8fr)]">
+              <div className="rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+                <div className="grid gap-4 md:grid-cols-3">
+                  {[
+                    {
+                      label: "Total balance",
+                      value: formatCurrency(report?.revenue ?? 0),
+                      note: `${report?.transactions ?? 0} transactions`,
+                      icon: Wallet,
+                      color: "text-blue-300"
+                    },
+                    {
+                      label: "Debit",
+                      value: formatCurrency(vendorPayoutDue + riderPayoutDue + (report?.taxPayable ?? 0)),
+                      note: "Payouts and liabilities",
+                      icon: ArrowDownRight,
+                      color: "text-fuchsia-300"
+                    },
+                    {
+                      label: "Credit",
+                      value: formatCurrency(netCashPosition),
+                      note: "Net position after liabilities",
+                      icon: ArrowUpRight,
+                      color: "text-emerald-300"
+                    }
+                  ].map((card) => {
+                    const Icon = card.icon;
+                    return (
+                      <article key={card.label} className="rounded-[26px] border border-white/10 bg-[#08111f] p-5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm text-slate-400">{card.label}</p>
+                          <Icon className={`h-5 w-5 ${card.color}`} />
+                        </div>
+                        <p className="mt-5 text-3xl font-semibold text-white">{card.value}</p>
+                        <p className="mt-3 text-xs text-slate-500">{card.note}</p>
+                      </article>
+                    );
+                  })}
                 </div>
-                <div className="text-right">
-                  <strong className="block text-lg text-orange-500">GHS {request.requestedAmount.toLocaleString()}</strong>
-                  <div className="mt-2 flex flex-wrap justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void reviewPayoutRequest(request.id, "reject")}
-                      className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
-                    >
-                      {reviewingRequestId === request.id ? "Working..." : "Reject"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => void reviewPayoutRequest(request.id, "approve")}
-                      className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700"
-                    >
-                      {reviewingRequestId === request.id ? "Working..." : "Approve payout"}
-                    </button>
+
+                <div className="mt-5 rounded-[28px] border border-white/5 bg-[#08111f] p-5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Transaction reports</h3>
+                      <p className="text-sm text-slate-500">Live gross, payouts, tax, and net cash profile.</p>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-[#0f1b31] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-slate-400">
+                      Live
+                    </div>
+                  </div>
+                  <div className="mt-8 flex h-64 items-end gap-4 rounded-[24px] bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.10),_transparent_45%),linear-gradient(180deg,_rgba(15,23,42,0.4),_rgba(2,6,23,0.95))] px-4 pb-5 pt-10">
+                    {financeBars.map((bar) => (
+                      <div key={bar.label} className="flex flex-1 flex-col items-center justify-end gap-3">
+                        <span className="text-xs font-semibold text-slate-500">{compactCurrency(bar.value)}</span>
+                        <div className="flex h-44 w-full items-end rounded-full bg-white/[0.03] p-1">
+                          <div className={`w-full rounded-full ${bar.color}`} style={{ height: `${bar.height}%` }} />
+                        </div>
+                        <span className="text-xs text-slate-400">{bar.label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
-            ))
-          ) : (
-            <p className="text-sm text-slate-500">No pending payout requests right now.</p>
-          )}
-        </div>
-      </section>
 
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">Delivered orders driving settlement</h2>
-        <div className="mt-5 space-y-3">
-          {deliveredOrders.slice(0, 8).map((order) => (
-            <div key={order.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-4">
-              <div>
-                <p className="font-semibold text-slate-900">{order.restaurant?.name ?? "Restaurant"}</p>
-                <p className="text-xs text-slate-500">{order.id}</p>
-              </div>
-              <div className="text-sm text-slate-600">
-                Rider: {order.delivery?.riderProfile?.user?.firstName ?? "Unassigned"} {order.delivery?.riderProfile?.user?.lastName ?? ""}
-              </div>
-              <div className="text-right">
-                <strong className="block text-orange-500">GHS {Number(order.totalAmount ?? 0).toLocaleString()}</strong>
-                <p className="text-[11px] text-slate-500">
-                  Vendor GHS {Number(order.settlement?.vendorPayoutAmount ?? 0).toLocaleString()} | Rider GHS{" "}
-                  {Number(order.settlement?.riderPayoutAmount ?? 0).toLocaleString()}
-                </p>
+              <div className="space-y-4 rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-white">My cards</h3>
+                  <button className="rounded-2xl border border-blue-500/40 bg-blue-500/10 px-4 py-2 text-xs font-semibold text-blue-300">
+                    Treasury active
+                  </button>
+                </div>
+                <div className="rounded-[28px] bg-[linear-gradient(135deg,_#1d4ed8,_#7c3aed_55%,_#22d3ee)] p-[1px]">
+                  <div className="rounded-[27px] bg-[#0b1529] p-5">
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span className="text-sm font-medium">BiteHub settlement card</span>
+                      <CreditCard className="h-5 w-5 text-white" />
+                    </div>
+                    <p className="mt-10 text-3xl font-semibold tracking-[0.22em] text-white">
+                      {String(report?.transactions ?? 0).padStart(4, "0")} {String(settlements?.summary.approvedRequestCount ?? 0).padStart(4, "0")} {String(settlements?.summary.pendingRequestCount ?? 0).padStart(4, "0")}
+                    </p>
+                    <div className="mt-6 flex items-end justify-between text-sm">
+                      <div>
+                        <p className="text-slate-400">Approved payout ready</p>
+                        <p className="mt-1 font-semibold text-white">{formatCurrency(settlements?.summary.approvedRequestAmount ?? 0)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-slate-400">Delay policy</p>
+                        <p className="mt-1 font-semibold text-white">{settings?.payoutDelayDays ?? 0} days</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => void createSettlementBatch("VENDORS")}
+                    className="rounded-2xl border border-white/10 bg-[#08111f] px-4 py-4 text-sm font-semibold text-white transition hover:border-orange-400/40 hover:bg-[#0d1a2f]"
+                  >
+                    {creatingTarget === "VENDORS" ? "Creating..." : "Batch vendors"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void createSettlementBatch("RIDERS")}
+                    className="rounded-2xl border border-white/10 bg-[#08111f] px-4 py-4 text-sm font-semibold text-white transition hover:border-cyan-400/40 hover:bg-[#0d1a2f]"
+                  >
+                    {creatingTarget === "RIDERS" ? "Creating..." : "Batch riders"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void createSettlementBatch("ALL")}
+                    className="col-span-2 rounded-2xl bg-orange-500 px-4 py-4 text-sm font-semibold text-white transition hover:bg-orange-400"
+                  >
+                    {creatingTarget === "ALL" ? "Creating..." : "Run full settlement"}
+                  </button>
+                </div>
               </div>
             </div>
-          ))}
-          {!deliveredOrders.length ? <p className="text-sm text-slate-500">No delivered orders yet, so no settlements are due.</p> : null}
-        </div>
-      </section>
 
-      <section className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-black text-slate-900">Vendor payout queue</h2>
-          <div className="mt-5 space-y-3">
-            {(query.data?.settlements.vendors ?? []).slice(0, 8).map((vendor) => (
-              <div key={vendor.profileId} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-4">
+            <div className="rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+              <div className="flex items-center justify-between gap-3">
                 <div>
-                  <p className="font-semibold text-slate-900">{vendor.payeeName}</p>
-                  <p className="text-xs text-slate-500">{vendor.contactName || "Vendor account"}</p>
-                  <p className="text-[11px] font-semibold text-slate-400">{vendor.payoutVerified ? "Payout verified" : "Payout pending verification"}</p>
+                  <h3 className="text-xl font-semibold text-white">Recent transactions</h3>
+                  <p className="mt-1 text-sm text-slate-500">Requests, approvals, and payout batches using real data.</p>
                 </div>
-                <div className="text-right">
-                  <strong className="text-orange-500">GHS {vendor.totalAmount.toLocaleString()}</strong>
-                  <p className={`text-[11px] font-semibold ${vendor.eligible ? "text-emerald-600" : "text-slate-400"}`}>
-                    {vendor.eligible ? "Ready to request" : "Below threshold / not verified"}
-                  </p>
-                  <p className="text-[11px] text-slate-400">Available GHS {Number(vendor.availableAmount ?? 0).toLocaleString()}</p>
+                <div className="rounded-2xl border border-white/10 bg-[#08111f] px-4 py-2 text-sm text-slate-400">{activityRows.length} shown</div>
+              </div>
+              <div className="mt-5 overflow-hidden rounded-[24px] border border-white/5 bg-[#08111f]">
+                <div className="grid grid-cols-[minmax(0,1.2fr)_120px_130px_130px] gap-3 border-b border-white/5 px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
+                  <span>Account</span>
+                  <span>Amount</span>
+                  <span>Status</span>
+                  <span>Time</span>
+                </div>
+                <div className="divide-y divide-white/5">
+                  {activityRows.length ? (
+                    activityRows.map((row) => (
+                      <div key={row.id} className="grid grid-cols-[minmax(0,1.2fr)_120px_130px_130px] gap-3 px-4 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/5 text-sm font-semibold text-white">{initials(row.label)}</div>
+                          <div className="min-w-0">
+                            <p className="truncate font-semibold text-white">{row.label}</p>
+                            <p className="truncate text-xs text-slate-500">{row.detail}</p>
+                          </div>
+                        </div>
+                        <div className="text-sm font-semibold text-white">{compactCurrency(row.amount)}</div>
+                        <div>
+                          <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${row.status === "APPROVED" || row.status === "BATCHED" ? "bg-emerald-500/15 text-emerald-300" : row.status === "PENDING" ? "bg-amber-500/15 text-amber-300" : "bg-rose-500/15 text-rose-300"}`}>
+                            {row.status.toLowerCase()}
+                          </span>
+                        </div>
+                        <div className="text-xs text-slate-400">{new Date(row.timestamp).toLocaleString()}</div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="px-4 py-8 text-sm text-slate-500">No finance activity matches your search yet.</div>
+                  )}
                 </div>
               </div>
-            ))}
-          </div>
-        </article>
-
-        <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-black text-slate-900">Rider payout queue</h2>
-          <div className="mt-5 space-y-3">
-            {(query.data?.settlements.riders ?? []).slice(0, 8).map((rider) => (
-              <div key={rider.profileId} className="flex items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-4">
-                <div>
-                  <p className="font-semibold text-slate-900">{rider.payeeName}</p>
-                  <p className="text-xs text-slate-500">{rider.vehicleType || "Delivery rider"}</p>
-                </div>
-                <div className="text-right">
-                  <strong className="text-orange-500">GHS {rider.totalAmount.toLocaleString()}</strong>
-                  <p className={`text-[11px] font-semibold ${rider.eligible ? "text-emerald-600" : "text-slate-400"}`}>{rider.eligible ? "Ready to request" : "Below threshold"}</p>
-                  <p className="text-[11px] text-slate-400">Available GHS {Number(rider.availableAmount ?? 0).toLocaleString()}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
-        <h2 className="text-xl font-black text-slate-900">Recent settlement batches</h2>
-        <div className="mt-5 space-y-3">
-          {(query.data?.settlements.batches ?? []).length ? (query.data?.settlements.batches ?? []).map((batch) => (
-            <div key={batch.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-slate-50 px-4 py-4">
-              <div>
-                <p className="font-semibold text-slate-900">{batch.metadata?.target ?? "Settlement batch"}</p>
-                <p className="text-xs text-slate-500">{new Date(batch.createdAt).toLocaleString()}</p>
-              </div>
-              <div className="text-sm text-slate-600">
-                Vendors: {batch.metadata?.vendorCount ?? 0} | Riders: {batch.metadata?.riderCount ?? 0}
-              </div>
-              <strong className="text-orange-500">GHS {Number(batch.metadata?.totalAmount ?? 0).toLocaleString()}</strong>
             </div>
-          )) : <p className="text-sm text-slate-500">No settlement batches have been created yet.</p>}
+          </div>
+
+          <aside className="space-y-4">
+            <article className="rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-white">Expenses</h3>
+                <Landmark className="h-5 w-5 text-slate-500" />
+              </div>
+              <div className="mt-6 flex justify-center">
+                <div className="relative flex h-52 w-52 items-center justify-center rounded-full bg-slate-950/70">
+                  <div
+                    className="absolute inset-0 rounded-full"
+                    style={{
+                      background: `conic-gradient(${expenseSegments
+                        .map((segment) => `${segment.color} ${segment.start}% ${segment.end}%`)
+                        .join(", ")})`
+                    }}
+                  />
+                  <div className="absolute inset-[18px] rounded-full bg-[#08111f]" />
+                  <div className="relative text-center">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-500">Total</p>
+                    <p className="mt-2 text-3xl font-semibold text-white">{compactCurrency(vendorPayoutDue + riderPayoutDue + (report?.taxPayable ?? 0) + (report?.serviceFeeRevenue ?? 0))}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-6 space-y-3">
+                {expenseSegments.map((segment) => (
+                  <div key={segment.label} className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="h-3 w-3 rounded-full" style={{ backgroundColor: segment.color }} />
+                      <span className="text-slate-300">{segment.label}</span>
+                    </div>
+                    <span className="font-semibold text-white">{segment.share.toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-white">Approval desk</h3>
+                <div className="rounded-2xl bg-orange-500/10 px-4 py-2 text-sm font-semibold text-orange-300">
+                  {settlements?.payoutRequests.pending.length ?? 0} pending
+                </div>
+              </div>
+              <div className="mt-5 space-y-3">
+                {(settlements?.payoutRequests.pending ?? []).length ? (
+                  settlements?.payoutRequests.pending.map((request) => (
+                    <div key={request.id} className="rounded-[24px] border border-white/5 bg-[#08111f] p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-white">{request.payeeName}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">{request.targetType}</p>
+                        </div>
+                        <div className="rounded-full bg-white/5 px-3 py-1 text-xs font-semibold text-slate-300">{compactCurrency(request.requestedAmount)}</div>
+                      </div>
+                      <p className="mt-3 text-sm text-slate-400">{request.contactName || "No contact label"}</p>
+                      {request.note ? <p className="mt-2 text-xs leading-5 text-slate-500">Note: {request.note}</p> : null}
+                      <div className="mt-4 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void reviewPayoutRequest(request.id, "reject")}
+                          className="flex-1 rounded-2xl border border-white/10 bg-transparent px-4 py-3 text-sm font-semibold text-slate-300 transition hover:bg-white/5"
+                        >
+                          {reviewingRequestId === request.id ? "Working..." : "Reject"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void reviewPayoutRequest(request.id, "approve")}
+                          className="flex-1 rounded-2xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-400"
+                        >
+                          {reviewingRequestId === request.id ? "Working..." : "Approve"}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-white/10 bg-[#08111f] px-4 py-8 text-center text-sm text-slate-500">
+                    No pending payout approvals right now.
+                  </div>
+                )}
+              </div>
+            </article>
+
+            <article className="rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+              <h3 className="text-xl font-semibold text-white">Settlement policy</h3>
+              <div className="mt-5 space-y-3">
+                {[
+                  ["Platform order commission", `${settings?.vendorCommissionRate ?? 0}%`],
+                  ["Delivery platform fee", `${settings?.riderCommissionRate ?? 0}%`],
+                  ["Service fee", `${settings?.serviceFeeRate ?? 0}%`],
+                  ["Tax rate", `${settings?.taxRate ?? 0}%`],
+                  ["Payout delay", `${settings?.payoutDelayDays ?? 0} days`],
+                  ["Minimum payout", formatCurrency(settings?.minimumPayoutAmount ?? 0)],
+                  ["Delivered orders", String(deliveredOrders.length)],
+                  ["Approved request pool", formatCurrency(settlements?.summary.approvedRequestAmount ?? 0)]
+                ].map(([label, value]) => (
+                  <div key={label} className="flex items-center justify-between rounded-2xl bg-[#08111f] px-4 py-3 text-sm">
+                    <span className="text-slate-400">{label}</span>
+                    <span className="font-semibold text-white">{value}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </aside>
         </div>
+
+        {actionMessage ? <div className="mt-4 rounded-[24px] border border-orange-400/20 bg-orange-500/10 px-4 py-4 text-sm text-orange-200">{actionMessage}</div> : null}
       </section>
     </DashboardShell>
   );
