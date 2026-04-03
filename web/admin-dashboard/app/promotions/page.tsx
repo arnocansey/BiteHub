@@ -36,20 +36,25 @@ function toDateTimeInput(value?: string | null) {
   return local.toISOString().slice(0, 16);
 }
 
+function getDefaultPromotionForm() {
+  const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  return {
+    code: "",
+    description: "",
+    discountPercent: "10",
+    endsAt: toDateTimeInput(nextWeek.toISOString()),
+    maxUsageCount: "",
+    minOrderAmount: "",
+    isActive: true
+  };
+}
+
 export default function PromotionsPage() {
   const { session, ready } = useAdminSessionState();
   const [selectedPromoId, setSelectedPromoId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    code: "",
-    description: "",
-    discountPercent: "10",
-    endsAt: "",
-    maxUsageCount: "",
-    minOrderAmount: "",
-    isActive: true
-  });
+  const [form, setForm] = useState(getDefaultPromotionForm);
 
   const query = useAdminData(() => adminRequest<PromoCodeRecord[]>("/admin/promotions"), [session?.accessToken]);
 
@@ -70,15 +75,7 @@ export default function PromotionsPage() {
   function loadPromoIntoForm(promo: PromoCodeRecord | null) {
     if (!promo) {
       setSelectedPromoId(null);
-      setForm({
-        code: "",
-        description: "",
-        discountPercent: "10",
-        endsAt: "",
-        maxUsageCount: "",
-        minOrderAmount: "",
-        isActive: true
-      });
+      setForm(getDefaultPromotionForm());
       return;
     }
 
@@ -98,11 +95,22 @@ export default function PromotionsPage() {
     setSaving(true);
     setMessage(null);
     try {
+      const normalizedCode = form.code.trim().toUpperCase();
+      const expiresAt = new Date(form.endsAt);
+
+      if (!normalizedCode) {
+        throw new Error("Enter a promo code before saving.");
+      }
+
+      if (Number.isNaN(expiresAt.getTime())) {
+        throw new Error("Choose a valid expiry date.");
+      }
+
       const payload = {
-        code: form.code.trim().toUpperCase(),
+        code: normalizedCode,
         description: form.description.trim() || undefined,
         discountPercent: Number(form.discountPercent || 0),
-        endsAt: new Date(form.endsAt).toISOString(),
+        endsAt: expiresAt.toISOString(),
         maxUsageCount: form.maxUsageCount ? Number(form.maxUsageCount) : null,
         minOrderAmount: form.minOrderAmount ? Number(form.minOrderAmount) : null,
         isActive: form.isActive
@@ -124,7 +132,8 @@ export default function PromotionsPage() {
 
       await query.refresh();
       if (!selectedPromoId) {
-        loadPromoIntoForm(null);
+        setSelectedPromoId(null);
+        setForm(getDefaultPromotionForm());
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Unable to save promotion.");
@@ -234,7 +243,7 @@ export default function PromotionsPage() {
             </div>
           </div>
 
-          <div className="mt-6 grid gap-4">
+          <div className="mt-6 grid gap-5">
             <label className="grid gap-2">
               <span className="text-sm font-medium text-slate-300">Promo code</span>
               <input
@@ -256,62 +265,80 @@ export default function PromotionsPage() {
               />
             </label>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="flex items-center gap-2 text-sm font-medium text-slate-300">
+            <section className="rounded-[24px] border border-white/10 bg-slate-900/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Offer setup</h3>
+                  <p className="mt-1 text-xs text-slate-500">Define the customer-facing discount and commercial limits.</p>
+                </div>
+                <div className="rounded-2xl bg-orange-500/10 p-2 text-orange-300">
                   <Percent className="h-4 w-4" />
-                  Discount percentage
-                </span>
-                <input
-                  type="number"
-                  min="0"
-                  max="100"
-                  value={form.discountPercent}
-                  onChange={(event) => setForm((current) => ({ ...current, discountPercent: event.target.value }))}
-                  className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none"
-                />
-              </label>
+                </div>
+              </div>
 
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-slate-300">Maximum usage</span>
-                <input
-                  type="number"
-                  min="1"
-                  value={form.maxUsageCount}
-                  onChange={(event) => setForm((current) => ({ ...current, maxUsageCount: event.target.value }))}
-                  placeholder="Unlimited"
-                  className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-                />
-              </label>
-            </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium text-slate-300">Discount percentage</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={form.discountPercent}
+                    onChange={(event) => setForm((current) => ({ ...current, discountPercent: event.target.value }))}
+                    className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none"
+                  />
+                </label>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="grid gap-2">
-                <span className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium text-slate-300">Maximum usage</span>
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.maxUsageCount}
+                    onChange={(event) => setForm((current) => ({ ...current, maxUsageCount: event.target.value }))}
+                    placeholder="Unlimited"
+                    className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="rounded-[24px] border border-white/10 bg-slate-900/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Schedule and limits</h3>
+                  <p className="mt-1 text-xs text-slate-500">Control when the promotion expires and the minimum cart needed.</p>
+                </div>
+                <div className="rounded-2xl bg-blue-500/10 p-2 text-blue-300">
                   <CalendarClock className="h-4 w-4" />
-                  Expiry date
-                </span>
-                <input
-                  type="datetime-local"
-                  value={form.endsAt}
-                  onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))}
-                  className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none"
-                />
-              </label>
+                </div>
+              </div>
 
-              <label className="grid gap-2">
-                <span className="text-sm font-medium text-slate-300">Minimum order amount</span>
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.minOrderAmount}
-                  onChange={(event) => setForm((current) => ({ ...current, minOrderAmount: event.target.value }))}
-                  placeholder="Optional"
-                  className="rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
-                />
-              </label>
-            </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium text-slate-300">Expiry date</span>
+                  <input
+                    type="datetime-local"
+                    value={form.endsAt}
+                    onChange={(event) => setForm((current) => ({ ...current, endsAt: event.target.value }))}
+                    className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none"
+                  />
+                </label>
+
+                <label className="grid gap-2">
+                  <span className="text-sm font-medium text-slate-300">Minimum order amount</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.minOrderAmount}
+                    onChange={(event) => setForm((current) => ({ ...current, minOrderAmount: event.target.value }))}
+                    placeholder="Optional"
+                    className="rounded-2xl border border-white/10 bg-slate-950 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                  />
+                </label>
+              </div>
+            </section>
 
             <label className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-900 px-4 py-3">
               <span className="text-sm font-medium text-slate-300">Promotion active</span>
