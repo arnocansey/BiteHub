@@ -22,6 +22,7 @@ import type { AdminSession } from "./admin-client";
 export type AdminManagerTitle =
   | "Admin User Manager"
   | "Admin Rider Manager"
+  | "Admin Finance Manager"
   | "Admin Customer Service Manager"
   | "Admin Vendor Manager"
   | "Platform Administrator";
@@ -83,6 +84,7 @@ const allowedAreasByTitle: Record<AdminManagerTitle, AdminArea[]> = {
   ],
   "Admin User Manager": ["overview", "users", "analytics", "reports", "settings"],
   "Admin Rider Manager": ["overview", "riders", "approvals", "analytics", "reports", "settings"],
+  "Admin Finance Manager": ["overview", "finance", "analytics", "reports", "settings"],
   "Admin Customer Service Manager": ["overview", "orders", "compliance", "notifications", "analytics", "reports", "settings"],
   "Admin Vendor Manager": ["overview", "vendors", "restaurants", "compliance", "approvals", "analytics", "reports", "settings"]
 };
@@ -93,6 +95,7 @@ export function getAdminManagerTitle(session: AdminSession | null | undefined): 
   if (
     title === "Admin User Manager" ||
     title === "Admin Rider Manager" ||
+    title === "Admin Finance Manager" ||
     title === "Admin Customer Service Manager" ||
     title === "Admin Vendor Manager" ||
     title === "Platform Administrator"

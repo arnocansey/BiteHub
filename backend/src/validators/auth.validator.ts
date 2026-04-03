@@ -12,6 +12,7 @@ const baseRegisterSchema = z.object({
 export const adminTitleValues = [
   "Admin User Manager",
   "Admin Rider Manager",
+  "Admin Finance Manager",
   "Admin Customer Service Manager",
   "Admin Vendor Manager"
 ] as const;

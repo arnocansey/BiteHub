@@ -210,7 +210,7 @@ export default function FinancePage() {
   if (!ready) return <LoadingCard />;
   if (!session) return <AuthRequiredCard message="Sign in with an admin account to access finance operations." />;
   if (!hasAdminAccess(session, "finance")) {
-    return <AccessDeniedCard message="Only platform administrators can access BiteHub finance operations." />;
+    return <AccessDeniedCard message="Only Admin Finance Manager or Platform Administrator accounts can access BiteHub finance operations." />;
   }
   if (query.loading) return <LoadingCard label="Loading finance data..." />;
   if (query.error) return <ErrorCard message={query.error} />;
