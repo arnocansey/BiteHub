@@ -309,6 +309,23 @@ export const payoutRequestReviewSchema = z.object({
   adminNote: z.string().max(240).optional()
 });
 
+export const payoutRequestPaySchema = z.object({
+  payoutMethod: z.enum(["MTN_MOBILE_MONEY", "VODAFONE_CASH", "BANK_TRANSFER"]),
+  payoutReference: z.string().max(120).optional(),
+  adminNote: z.string().max(240).optional()
+});
+
+export const adminPromoCodeSchema = z.object({
+  code: z.string().min(2).max(40),
+  description: z.string().max(240).optional(),
+  discountPercent: z.number().min(0).max(100),
+  startsAt: z.string().datetime().optional(),
+  endsAt: z.string().datetime(),
+  maxUsageCount: z.number().int().positive().max(100000).nullable().optional(),
+  minOrderAmount: z.number().nonnegative().nullable().optional(),
+  isActive: z.boolean().optional()
+});
+
 export const createMenuItemSchema = z.object({
   restaurantId: z.string().min(1),
   categoryId: z.string().min(1).optional(),

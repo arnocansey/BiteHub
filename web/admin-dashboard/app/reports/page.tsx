@@ -27,9 +27,22 @@ type RetentionReport = {
 };
 type Order = { id: string; status: string; totalAmount: number | string; placedAt?: string; restaurant?: { name?: string } };
 
+function downloadBlob(filename: string, content: BlobPart, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export default function ReportsPage() {
   const { session, ready } = useAdminSessionState();
   const [activeRange, setActiveRange] = useState<ReturnType<typeof parseAdminDateRange>>("today");
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -67,6 +80,103 @@ export default function ReportsPage() {
     .sort((left, right) => right[1] - left[1])
     .slice(0, 5);
 
+  const exportRows = useMemo(
+    () => [
+      ["Report", "Value"],
+      ["Daily revenue", String(query.data?.report.revenue ?? 0)],
+      ["Weekly orders", String(orders.length)],
+      ["Vendor performance", topRestaurants[0]?.[0] ?? "No vendor/restaurant revenue yet"],
+      ["Rider performance", `${query.data?.report.transactions ?? 0} completed transactions tracked`],
+      ["Customer growth", String(query.data?.retention.loyaltyMembers ?? 0)],
+      ["Gross order value", String(query.data?.report.grossOrderValue ?? 0)],
+      ["Order commission revenue", String(query.data?.report.orderCommissionRevenue ?? 0)],
+      ["Delivery platform fee revenue", String(query.data?.report.deliveryPlatformRevenue ?? 0)],
+      ["Service fee revenue", String(query.data?.report.serviceFeeRevenue ?? 0)],
+      ["Subscription revenue", String(query.data?.report.subscriptionRevenue ?? 0)],
+      ["Tax payable", String(query.data?.report.taxPayable ?? 0)]
+    ],
+    [orders.length, query.data?.report, query.data?.retention.loyaltyMembers, topRestaurants]
+  );
+
+  function exportCsv() {
+    const csv = exportRows
+      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
+      .join("\n");
+    downloadBlob("bitehub-reports.csv", csv, "text/csv;charset=utf-8;");
+    setExportMessage("CSV report exported.");
+  }
+
+  function exportExcel() {
+    const tableRows = exportRows
+      .map(
+        (row) =>
+          `<tr>${row
+            .map((cell) => `<td style="border:1px solid #d4d4d8;padding:8px;">${String(cell)}</td>`)
+            .join("")}</tr>`
+      )
+      .join("");
+
+    const html = `
+      <html>
+        <head><meta charset="utf-8" /></head>
+        <body>
+          <table>
+            ${tableRows}
+          </table>
+        </body>
+      </html>
+    `;
+
+    downloadBlob("bitehub-reports.xls", html, "application/vnd.ms-excel;charset=utf-8;");
+    setExportMessage("Excel report exported.");
+  }
+
+  function exportPdf() {
+    const printWindow = window.open("", "_blank", "width=960,height=720");
+    if (!printWindow) {
+      setExportMessage("Pop-up blocked. Allow pop-ups to export PDF.");
+      return;
+    }
+
+    const htmlRows = exportRows
+      .map(
+        (row, index) => `
+          <tr>
+            ${row
+              .map(
+                (cell) =>
+                  `<td style="padding:10px;border:1px solid #cbd5e1;background:${index === 0 ? "#f8fafc" : "#ffffff"};">${String(cell)}</td>`
+              )
+              .join("")}
+          </tr>
+        `
+      )
+      .join("");
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>BiteHub Reports</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+            h1 { margin-bottom: 8px; }
+            p { color: #475569; margin-bottom: 24px; }
+            table { width: 100%; border-collapse: collapse; }
+          </style>
+        </head>
+        <body>
+          <h1>BiteHub Reports</h1>
+          <p>Generated from the live admin reports page.</p>
+          <table>${htmlRows}</table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+    setExportMessage("PDF export opened in the print dialog.");
+  }
+
   if (!ready) return <LoadingCard />;
   if (!session) return <AuthRequiredCard message="Sign in with an admin account to see live reports." />;
   if (!hasAdminAccess(session, "reports")) {
@@ -103,12 +213,17 @@ export default function ReportsPage() {
         <article className="rounded-3xl bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-semibold text-slate-900">Export formats</h2>
           <div className="mt-5 flex flex-wrap gap-3">
-            {["PDF", "Excel", "CSV"].map((item) => (
-              <div key={item} className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700">
-                {item}
-              </div>
-            ))}
+            <button type="button" onClick={exportPdf} className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100">
+              PDF
+            </button>
+            <button type="button" onClick={exportExcel} className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100">
+              Excel
+            </button>
+            <button type="button" onClick={exportCsv} className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100">
+              CSV
+            </button>
           </div>
+          {exportMessage ? <p className="mt-4 text-sm font-medium text-emerald-600">{exportMessage}</p> : null}
           <p className="mt-4 text-sm leading-6 text-slate-500">
             These report types are driven by live BiteHub finance, order, retention, vendor, and rider data.
           </p>

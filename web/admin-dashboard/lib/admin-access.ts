@@ -88,7 +88,7 @@ const allowedAreasByTitle: Record<AdminManagerTitle, AdminArea[]> = {
   ],
   "Admin User Manager": ["overview", "users", "analytics", "reports", "settings"],
   "Admin Rider Manager": ["overview", "riders", "approvals", "analytics", "reports", "settings"],
-  "Admin Finance Manager": ["overview", "orders", "vendors", "riders", "users", "finance", "promotions", "reports", "settings"],
+  "Admin Finance Manager": ["overview", "orders", "vendors", "finance", "promotions", "reports", "settings"],
   "Admin Customer Service Manager": ["overview", "orders", "compliance", "notifications", "analytics", "reports", "settings"],
   "Admin Vendor Manager": ["overview", "vendors", "restaurants", "compliance", "approvals", "analytics", "reports", "settings"]
 };
@@ -131,8 +131,6 @@ export function getAdminNavigation(session: AdminSession | null | undefined) {
       "overview",
       "orders",
       "vendors",
-      "riders",
-      "users",
       "finance",
       "promotions",
       "reports",

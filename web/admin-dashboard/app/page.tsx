@@ -226,9 +226,9 @@ export default function HomePage() {
   const financeMetrics = [
     { label: "Revenue", value: `GHS ${(reportQuery.data?.revenue ?? 0).toLocaleString()}`, icon: Wallet },
     { label: "Transactions", value: reportQuery.data?.transactions ?? 0, icon: ShoppingBag },
-    { label: "Customers", value: overviewQuery.data?.users ?? 0, icon: Users },
     { label: "Vendors", value: overviewQuery.data?.restaurants ?? 0, icon: Store },
-    { label: "Riders Online", value: liveRiders.length, icon: Bike },
+    { label: "Paid transactions", value: reportQuery.data?.transactions ?? 0, icon: Users },
+    { label: "Open vendor reviews", value: approvalsQuery.data?.vendors.length ?? 0, icon: Bike },
     { label: "Promotions", value: opsQuery.data?.activeRiderIncentives ?? 0, icon: Gift }
   ];
 
@@ -237,7 +237,7 @@ export default function HomePage() {
       title={financeManagerView ? "Finance manager overview" : "Live operations overview"}
       description={
         financeManagerView
-          ? "This workspace is tailored for the Admin Finance Manager, with a direct focus on revenue, customers, vendors, riders, promotions, and report-driving business health."
+          ? "This workspace is tailored for the Admin Finance Manager, with a direct focus on revenue, vendors, promotions, reports, and business health."
           : `This workspace follows the BiteHub admin UI and adapts what each manager sees. ${managerTitle} accounts land in a focused control surface instead of a one-size-fits-all dashboard. The current header filter is applied to order-driven sections here.`
       }
       session={session}
@@ -318,7 +318,7 @@ export default function HomePage() {
 
       <section className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Customer and risk signals" : "Trust and recovery queue"}</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Vendor and risk signals" : "Trust and recovery queue"}</h2>
           <p className="text-sm text-slate-500">
             Low-confidence ETAs: {trustQuery.data?.overview.lowConfidenceEtas ?? 0}
           </p>
@@ -400,7 +400,7 @@ export default function HomePage() {
         </article>
 
         <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Rider and customer growth signals" : "Quality signals"}</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Promotion and quality signals" : "Quality signals"}</h2>
           <div className="mt-6 space-y-3">
             {(opsQuery.data?.qualityScores ?? []).slice(0, 4).map((score) => (
               <div key={score.id} className="rounded-2xl bg-slate-50 p-4">

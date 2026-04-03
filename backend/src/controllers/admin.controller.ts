@@ -37,6 +37,9 @@ const platformSettingsDelegate = prisma as typeof prisma & {
 const payoutRequestDelegate = prisma as typeof prisma & {
   payoutRequest: any;
 };
+const promoCodeDelegate = prisma as typeof prisma & {
+  promoCode: any;
+};
 
 async function getPlatformSettingsRecord() {
   return platformSettingsDelegate.platformSettings.upsert({
@@ -166,6 +169,8 @@ async function buildSettlementPreview() {
     paidAt: request.paidAt,
     note: request.note ?? null,
     adminNote: request.adminNote ?? null,
+    payoutMethod: request.payoutMethod ?? null,
+    payoutReference: request.payoutReference ?? null,
     payeeName:
       request.targetType === PayoutRequestTarget.VENDOR
         ? request.vendorProfile?.businessName ?? "Vendor"
@@ -1473,6 +1478,77 @@ export const adminController = {
     res.json(updated);
   },
 
+  async payPayoutRequest(req: Request, res: Response) {
+    const requestId = String(req.params.requestId);
+    const payoutRequest = await payoutRequestDelegate.payoutRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        vendorProfile: {
+          include: { user: true }
+        },
+        riderProfile: {
+          include: { user: true }
+        }
+      }
+    });
+
+    if (!payoutRequest) {
+      return res.status(404).json({ message: "Payout request not found." });
+    }
+
+    if (payoutRequest.status !== PayoutRequestStatus.APPROVED) {
+      return res.status(400).json({ message: "Only approved payout requests can be marked as paid." });
+    }
+
+    const updated = await payoutRequestDelegate.payoutRequest.update({
+      where: { id: requestId },
+      data: {
+        status: PayoutRequestStatus.PAID,
+        payoutMethod: req.body.payoutMethod,
+        payoutReference: req.body.payoutReference ?? null,
+        adminNote: req.body.adminNote ?? payoutRequest.adminNote ?? null,
+        paidAt: new Date()
+      } as any
+    });
+
+    const targetUserId =
+      payoutRequest.targetType === PayoutRequestTarget.VENDOR
+        ? payoutRequest.vendorProfile?.userId
+        : payoutRequest.riderProfile?.userId;
+
+    if (targetUserId) {
+      await prisma.notification.create({
+        data: {
+          userId: targetUserId,
+          title: "Payout sent",
+          body: `Your payout of GHS ${Number(updated.approvedAmount ?? updated.requestedAmount).toLocaleString()} was sent via ${String(req.body.payoutMethod).replaceAll("_", " ")}.`,
+          payload: {
+            type: "PAYOUT_REQUEST_PAID",
+            requestId: updated.id,
+            payoutMethod: req.body.payoutMethod,
+            payoutReference: req.body.payoutReference ?? null
+          }
+        }
+      });
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.sub,
+        action: "PAYOUT_REQUEST_PAID",
+        entityType: "PAYOUT_REQUEST",
+        entityId: updated.id,
+        metadata: {
+          payoutMethod: req.body.payoutMethod,
+          payoutReference: req.body.payoutReference ?? null,
+          approvedAmount: Number(updated.approvedAmount ?? updated.requestedAmount)
+        }
+      }
+    });
+
+    res.json(updated);
+  },
+
   async createSettlementBatch(req: Request, res: Response) {
     const preview = await buildSettlementPreview();
     const target = String(req.body.target);
@@ -1505,22 +1581,72 @@ export const adminController = {
       }
     });
 
-    if (approvedRequests.length) {
-      await payoutRequestDelegate.payoutRequest.updateMany({
-        where: {
-          id: { in: approvedRequests.map((item: any) => item.id) }
-        },
-        data: {
-          status: PayoutRequestStatus.PAID,
-          paidAt: new Date()
-        }
-      });
-    }
-
     res.status(201).json({
       created: true,
       batch
     });
+  },
+
+  async promotions(_req: Request, res: Response) {
+    const promoCodes = await promoCodeDelegate.promoCode.findMany({
+      include: {
+        _count: {
+          select: { orders: true }
+        }
+      },
+      orderBy: [{ isActive: "desc" }, { endsAt: "asc" }]
+    });
+
+    res.json(
+      promoCodes.map((promo: any) => ({
+        id: promo.id,
+        code: promo.code,
+        description: promo.description ?? "",
+        discountPercent: Number(promo.discountPercent ?? 0),
+        startsAt: promo.startsAt,
+        endsAt: promo.endsAt,
+        maxUsageCount: promo.maxUsageCount ?? null,
+        usageCount: promo._count?.orders ?? 0,
+        minOrderAmount: Number(promo.minOrderAmount ?? 0),
+        isActive: promo.isActive
+      }))
+    );
+  },
+
+  async createPromotion(req: Request, res: Response) {
+    const created = await promoCodeDelegate.promoCode.create({
+      data: {
+        code: String(req.body.code).trim().toUpperCase(),
+        description: req.body.description ?? null,
+        discountPercent: req.body.discountPercent,
+        startsAt: req.body.startsAt ? new Date(req.body.startsAt) : new Date(),
+        endsAt: new Date(req.body.endsAt),
+        maxUsageCount: req.body.maxUsageCount ?? null,
+        minOrderAmount: req.body.minOrderAmount ?? null,
+        isActive: req.body.isActive ?? true
+      } as any
+    });
+
+    res.status(201).json(created);
+  },
+
+  async updatePromotion(req: Request, res: Response) {
+    const promoId = String(req.params.promoId);
+    const updated = await promoCodeDelegate.promoCode.update({
+      where: { id: promoId },
+      data: {
+        code: req.body.code ? String(req.body.code).trim().toUpperCase() : undefined,
+        description: req.body.description,
+        discountPercent: req.body.discountPercent,
+        startsAt: req.body.startsAt ? new Date(req.body.startsAt) : undefined,
+        endsAt: req.body.endsAt ? new Date(req.body.endsAt) : undefined,
+        maxUsageCount: req.body.maxUsageCount,
+        minOrderAmount: req.body.minOrderAmount,
+        isActive: req.body.isActive
+      } as any
+    });
+
+    res.json(updated);
   },
 
   async operationsIntelligence(_req: Request, res: Response) {

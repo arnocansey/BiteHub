@@ -61,6 +61,9 @@ type SettlementPreview = {
       contactName?: string;
       createdAt: string;
       note?: string | null;
+      adminNote?: string | null;
+      payoutMethod?: string | null;
+      payoutReference?: string | null;
     }>;
     approved: Array<{
       id: string;
@@ -71,6 +74,10 @@ type SettlementPreview = {
       payeeName: string;
       contactName?: string;
       createdAt: string;
+      note?: string | null;
+      adminNote?: string | null;
+      payoutMethod?: string | null;
+      payoutReference?: string | null;
     }>;
   };
   batches: Array<{
@@ -115,6 +122,8 @@ export default function FinancePage() {
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [creatingTarget, setCreatingTarget] = useState<string | null>(null);
   const [reviewingRequestId, setReviewingRequestId] = useState<string | null>(null);
+  const [payingRequestId, setPayingRequestId] = useState<string | null>(null);
+  const [paymentForms, setPaymentForms] = useState<Record<string, { payoutMethod: string; payoutReference: string }>>({});
   const [searchTerm, setSearchTerm] = useState("");
 
   const query = useAdminData(
@@ -246,6 +255,44 @@ export default function FinancePage() {
       setActionMessage(error instanceof Error ? error.message : "Unable to review payout request.");
     } finally {
       setReviewingRequestId(null);
+    }
+  }
+
+  function getPaymentForm(requestId: string) {
+    return paymentForms[requestId] ?? {
+      payoutMethod: "MTN_MOBILE_MONEY",
+      payoutReference: ""
+    };
+  }
+
+  function updatePaymentForm(requestId: string, patch: Partial<{ payoutMethod: string; payoutReference: string }>) {
+    setPaymentForms((current) => ({
+      ...current,
+      [requestId]: {
+        ...getPaymentForm(requestId),
+        ...patch
+      }
+    }));
+  }
+
+  async function payPayoutRequest(requestId: string) {
+    const form = getPaymentForm(requestId);
+    setPayingRequestId(requestId);
+    setActionMessage(null);
+    try {
+      await adminRequest(`/admin/finance/payout-requests/${requestId}/pay`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          payoutMethod: form.payoutMethod,
+          payoutReference: form.payoutReference || undefined
+        })
+      });
+      setActionMessage(`Payout marked as paid via ${form.payoutMethod.replaceAll("_", " ").toLowerCase()}.`);
+      await query.refresh();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "Unable to pay payout request.");
+    } finally {
+      setPayingRequestId(null);
     }
   }
 
@@ -513,6 +560,66 @@ export default function FinancePage() {
                 ) : (
                   <div className="rounded-[24px] border border-dashed border-white/10 bg-[#08111f] px-4 py-8 text-center text-sm text-slate-500">
                     No pending payout approvals right now.
+                  </div>
+                )}
+              </div>
+            </article>
+
+            <article className="rounded-[30px] border border-white/5 bg-[#0b1529] p-5">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-white">Payout requests</h3>
+                <div className="rounded-2xl bg-cyan-500/10 px-4 py-2 text-sm font-semibold text-cyan-300">
+                  {settlements?.payoutRequests.approved.length ?? 0} ready to pay
+                </div>
+              </div>
+              <p className="mt-2 text-sm text-slate-500">Approve first, then send money by MTN Mobile Money, Vodafone Cash, or bank transfer.</p>
+              <div className="mt-5 space-y-3">
+                {(settlements?.payoutRequests.approved ?? []).length ? (
+                  settlements?.payoutRequests.approved.map((request) => {
+                    const form = getPaymentForm(request.id);
+                    return (
+                      <div key={request.id} className="rounded-[24px] border border-white/5 bg-[#08111f] p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-white">{request.payeeName}</p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.2em] text-slate-500">{request.targetType}</p>
+                          </div>
+                          <div className="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-300">
+                            {compactCurrency(request.approvedAmount || request.requestedAmount)}
+                          </div>
+                        </div>
+                        <p className="mt-3 text-sm text-slate-400">{request.contactName || "No contact label"}</p>
+                        <div className="mt-4 grid gap-3">
+                          <select
+                            value={form.payoutMethod}
+                            onChange={(event) => updatePaymentForm(request.id, { payoutMethod: event.target.value })}
+                            className="rounded-2xl border border-white/10 bg-[#0b1529] px-4 py-3 text-sm text-white outline-none"
+                          >
+                            <option value="MTN_MOBILE_MONEY">MTN Mobile Money</option>
+                            <option value="VODAFONE_CASH">Vodafone Cash</option>
+                            <option value="BANK_TRANSFER">Bank transfer</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={form.payoutReference}
+                            onChange={(event) => updatePaymentForm(request.id, { payoutReference: event.target.value })}
+                            placeholder="Reference / transaction ID"
+                            className="rounded-2xl border border-white/10 bg-[#0b1529] px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => void payPayoutRequest(request.id)}
+                            className="rounded-2xl bg-cyan-500 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-400"
+                          >
+                            {payingRequestId === request.id ? "Paying..." : "Pay"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-[24px] border border-dashed border-white/10 bg-[#08111f] px-4 py-8 text-center text-sm text-slate-500">
+                    No approved payout requests are waiting for payment.
                   </div>
                 )}
               </div>

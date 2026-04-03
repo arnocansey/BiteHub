@@ -13,7 +13,9 @@ import {
   adminRiderMessageSchema,
   adminUpdateRiderSchema,
   assignRiderSchema,
+  adminPromoCodeSchema,
   categorySchema,
+  payoutRequestPaySchema,
   payoutRequestReviewSchema,
   settlementActionSchema,
   restaurantCollectionSchema,
@@ -67,7 +69,15 @@ router.patch(
   validate(payoutRequestReviewSchema),
   asyncHandler(adminController.rejectPayoutRequest)
 );
+router.patch(
+  "/finance/payout-requests/:requestId/pay",
+  validate(payoutRequestPaySchema),
+  asyncHandler(adminController.payPayoutRequest)
+);
 router.post("/finance/settlements", validate(settlementActionSchema), asyncHandler(adminController.createSettlementBatch));
+router.get("/promotions", asyncHandler(adminController.promotions));
+router.post("/promotions", validate(adminPromoCodeSchema), asyncHandler(adminController.createPromotion));
+router.patch("/promotions/:promoId", validate(adminPromoCodeSchema.partial()), asyncHandler(adminController.updatePromotion));
 router.get("/support-tickets", asyncHandler(adminController.supportTickets));
 router.get("/trust/overview", asyncHandler(adminController.trustOverview));
 router.get("/settings", asyncHandler(adminController.settings));
