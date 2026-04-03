@@ -25,7 +25,28 @@ type RetentionReport = {
   loyaltyMembers: number;
   averagePoints: number;
 };
-type Order = { id: string; status: string; totalAmount: number | string; placedAt?: string; restaurant?: { name?: string } };
+type Order = {
+  id: string;
+  status: string;
+  totalAmount: number | string;
+  placedAt?: string;
+  restaurant?: { name?: string };
+  payment?: { status?: string; method?: string } | null;
+  settlement?: {
+    vendorPayoutAmount?: number | string;
+    riderPayoutAmount?: number | string;
+    netPlatformRevenue?: number | string;
+    taxAmount?: number | string;
+  } | null;
+  delivery?: { riderProfile?: { user?: { firstName?: string; lastName?: string } } | null } | null;
+};
+
+function formatMoney(value: number | string | null | undefined) {
+  return `GHS ${Number(value ?? 0).toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
 
 function downloadBlob(filename: string, content: BlobPart, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
@@ -70,8 +91,28 @@ export default function ReportsPage() {
     () => (query.data?.orders ?? []).filter((order) => isWithinAdminDateRange(order.placedAt, activeRange)),
     [activeRange, query.data?.orders]
   );
+  const deliveredPaidOrders = useMemo(
+    () => orders.filter((order) => order.status === "DELIVERED" && order.payment?.status === "PAID"),
+    [orders]
+  );
+  const rangeRevenue = useMemo(
+    () =>
+      deliveredPaidOrders.reduce(
+        (sum, order) => sum + Number(order.settlement?.netPlatformRevenue ?? 0),
+        0
+      ),
+    [deliveredPaidOrders]
+  );
+  const rangeGrossOrderValue = useMemo(
+    () => deliveredPaidOrders.reduce((sum, order) => sum + Number(order.totalAmount ?? 0), 0),
+    [deliveredPaidOrders]
+  );
+  const rangeTaxPayable = useMemo(
+    () => deliveredPaidOrders.reduce((sum, order) => sum + Number(order.settlement?.taxAmount ?? 0), 0),
+    [deliveredPaidOrders]
+  );
   const topRestaurants = Object.entries(
-    orders.reduce<Record<string, number>>((accumulator, order) => {
+    deliveredPaidOrders.reduce<Record<string, number>>((accumulator, order) => {
       const key = order.restaurant?.name ?? "Unknown restaurant";
       accumulator[key] = (accumulator[key] ?? 0) + Number(order.totalAmount ?? 0);
       return accumulator;
@@ -79,23 +120,54 @@ export default function ReportsPage() {
   )
     .sort((left, right) => right[1] - left[1])
     .slice(0, 5);
+  const topRiders = Object.entries(
+    deliveredPaidOrders.reduce<Record<string, { orders: number; earnings: number }>>((accumulator, order) => {
+      const riderName =
+        `${order.delivery?.riderProfile?.user?.firstName ?? ""} ${order.delivery?.riderProfile?.user?.lastName ?? ""}`.trim() ||
+        "Unassigned rider";
+      const current = accumulator[riderName] ?? { orders: 0, earnings: 0 };
+      current.orders += 1;
+      current.earnings += Number(order.settlement?.riderPayoutAmount ?? 0);
+      accumulator[riderName] = current;
+      return accumulator;
+    }, {})
+  )
+    .sort((left, right) => right[1].orders - left[1].orders || right[1].earnings - left[1].earnings)
+    .slice(0, 5);
+  const topVendorPerformanceLabel =
+    topRestaurants[0] != null
+      ? `${topRestaurants[0][0]} (${formatMoney(topRestaurants[0][1])})`
+      : "No vendor/restaurant revenue yet";
+  const topRiderPerformanceLabel =
+    topRiders[0] != null
+      ? `${topRiders[0][0]} (${topRiders[0][1].orders} deliveries)`
+      : "No rider delivery activity yet";
 
   const exportRows = useMemo(
     () => [
       ["Report", "Value"],
-      ["Daily revenue", String(query.data?.report.revenue ?? 0)],
+      ["Range revenue", String(rangeRevenue)],
       ["Weekly orders", String(orders.length)],
-      ["Vendor performance", topRestaurants[0]?.[0] ?? "No vendor/restaurant revenue yet"],
-      ["Rider performance", `${query.data?.report.transactions ?? 0} completed transactions tracked`],
+      ["Vendor performance", topVendorPerformanceLabel],
+      ["Rider performance", topRiderPerformanceLabel],
       ["Customer growth", String(query.data?.retention.loyaltyMembers ?? 0)],
-      ["Gross order value", String(query.data?.report.grossOrderValue ?? 0)],
+      ["Gross order value", String(rangeGrossOrderValue)],
       ["Order commission revenue", String(query.data?.report.orderCommissionRevenue ?? 0)],
       ["Delivery platform fee revenue", String(query.data?.report.deliveryPlatformRevenue ?? 0)],
       ["Service fee revenue", String(query.data?.report.serviceFeeRevenue ?? 0)],
       ["Subscription revenue", String(query.data?.report.subscriptionRevenue ?? 0)],
-      ["Tax payable", String(query.data?.report.taxPayable ?? 0)]
+      ["Tax payable", String(rangeTaxPayable)]
     ],
-    [orders.length, query.data?.report, query.data?.retention.loyaltyMembers, topRestaurants]
+    [
+      orders.length,
+      query.data?.report,
+      query.data?.retention.loyaltyMembers,
+      rangeGrossOrderValue,
+      rangeRevenue,
+      rangeTaxPayable,
+      topRiderPerformanceLabel,
+      topVendorPerformanceLabel
+    ]
   );
 
   function exportCsv() {
@@ -233,15 +305,15 @@ export default function ReportsPage() {
       <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-3xl bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">Platform revenue</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">GHS {(query.data?.report.revenue ?? 0).toLocaleString()}</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{formatMoney(rangeRevenue)}</p>
         </article>
         <article className="rounded-3xl bg-white p-5 shadow-sm">
-          <p className="text-sm text-slate-500">Transactions</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">{query.data?.report.transactions ?? 0}</p>
+          <p className="text-sm text-slate-500">Range orders</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{orders.length}</p>
         </article>
         <article className="rounded-3xl bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">Gross order value</p>
-          <p className="mt-2 text-3xl font-semibold text-slate-900">GHS {(query.data?.report.grossOrderValue ?? 0).toLocaleString()}</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{formatMoney(rangeGrossOrderValue)}</p>
         </article>
       </section>
 
@@ -264,7 +336,7 @@ export default function ReportsPage() {
         </article>
         <article className="rounded-3xl bg-amber-50 p-5 shadow-sm ring-1 ring-amber-100">
           <p className="text-sm text-amber-700">Tax payable to government</p>
-          <p className="mt-2 text-2xl font-black text-amber-900">GHS {(query.data?.report.taxPayable ?? 0).toLocaleString()}</p>
+          <p className="mt-2 text-2xl font-black text-amber-900">{formatMoney(rangeTaxPayable)}</p>
         </article>
       </section>
 
@@ -323,6 +395,22 @@ export default function ReportsPage() {
       ) : (
         <EmptyCard message="Revenue reports will appear here once paid orders exist." />
       )}
+
+      {topRiders.length ? (
+        <section className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-slate-900">Top riders by completed deliveries</h2>
+          <div className="mt-6 space-y-3">
+            {topRiders.map(([name, summary]) => (
+              <div key={name} className="flex items-center justify-between rounded-2xl bg-slate-50 px-4 py-4">
+                <span className="font-medium text-slate-900">{name}</span>
+                <strong className="text-orange-500">
+                  {summary.orders} deliveries · {formatMoney(summary.earnings)}
+                </strong>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </DashboardShell>
   );
 }
