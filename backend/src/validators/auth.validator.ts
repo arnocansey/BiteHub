@@ -1,11 +1,17 @@
 import { UserRole } from "../generated/prisma/client";
 import { z } from "zod";
 
+const phoneSchema = z
+  .string()
+  .min(8)
+  .max(30)
+  .regex(/^[\d+\-\s()]+$/, "Phone number can only contain numbers and common phone symbols");
+
 const baseRegisterSchema = z.object({
   firstName: z.string().min(2),
   lastName: z.string().min(2),
   email: z.string().email(),
-  phone: z.string().min(8).optional(),
+  phone: phoneSchema.optional(),
   password: z.string().min(8)
 });
 

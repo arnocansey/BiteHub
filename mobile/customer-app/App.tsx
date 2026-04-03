@@ -93,6 +93,10 @@ function buildLocationLabel(places: Location.LocationGeocodedAddress[]) {
   return [place.district, place.city, place.region, place.country].filter(Boolean).slice(0, 3).join(", ");
 }
 
+function sanitizePhone(value: string) {
+  return value.replace(/[^\d+\-\s()]/g, "");
+}
+
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -1061,7 +1065,7 @@ function AppContent() {
         <>
           <TextInput value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor="#9ca3af" style={styles.input} />
           <TextInput value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor="#9ca3af" style={styles.input} />
-          <TextInput value={phone} onChangeText={setPhone} placeholder="Phone number" placeholderTextColor="#9ca3af" style={styles.input} keyboardType="phone-pad" />
+          <TextInput value={phone} onChangeText={(value) => setPhone(sanitizePhone(value))} placeholder="Phone number" placeholderTextColor="#9ca3af" style={styles.input} keyboardType="phone-pad" />
         </>
       ) : null}
       <TextInput value={email} onChangeText={setEmail} placeholder="Email" placeholderTextColor="#9ca3af" style={styles.input} autoCapitalize="none" />

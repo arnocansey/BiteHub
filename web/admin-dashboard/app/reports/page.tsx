@@ -78,10 +78,43 @@ export default function ReportsPage() {
 
   return (
     <DashboardShell
-      title="Reports and insights"
-      description={`Reporting stays visible to ${managerTitle} accounts, but the navigation and workspace remain role-aware. The header range selector filters the order-based sections on this page.`}
+      title="Reports"
+      description={`This page generates business reports for ${managerTitle} accounts. The header range selector filters the order-based sections on this page.`}
       session={session}
     >
+      <section className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+        <article className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-semibold text-slate-900">Reports available</h2>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {[
+              "Daily revenue",
+              "Weekly orders",
+              "Vendor performance",
+              "Rider performance",
+              "Customer growth"
+            ].map((item) => (
+              <div key={item} className="rounded-2xl bg-slate-50 px-4 py-4 text-sm font-semibold text-slate-700">
+                {item}
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="rounded-3xl bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-semibold text-slate-900">Export formats</h2>
+          <div className="mt-5 flex flex-wrap gap-3">
+            {["PDF", "Excel", "CSV"].map((item) => (
+              <div key={item} className="rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm font-semibold text-orange-700">
+                {item}
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 text-sm leading-6 text-slate-500">
+            These report types are driven by live BiteHub finance, order, retention, vendor, and rider data.
+          </p>
+        </article>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-3">
         <article className="rounded-3xl bg-white p-5 shadow-sm">
           <p className="text-sm text-slate-500">Platform revenue</p>

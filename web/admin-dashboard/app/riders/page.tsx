@@ -139,6 +139,10 @@ function getStatusLabel(courier: FleetCourier) {
   return "Offline";
 }
 
+function sanitizePhone(value: string) {
+  return value.replace(/[^\d+\-\s()]/g, "");
+}
+
 export default function RidersPage() {
   const profilePanelRef = useRef<HTMLDivElement | null>(null);
   const { session, ready } = useAdminSessionState();
@@ -509,8 +513,13 @@ export default function RidersPage() {
                       type={field.key === "password" ? "password" : "text"}
                       value={(createCourierForm as Record<string, string>)[field.key]}
                       onChange={(event) =>
-                        setCreateCourierForm((current) => ({ ...current, [field.key]: event.target.value }))
+                        setCreateCourierForm((current) => ({
+                          ...current,
+                          [field.key]: field.key === "phone" ? sanitizePhone(event.target.value) : event.target.value
+                        }))
                       }
+                      inputMode={field.key === "phone" ? "tel" : undefined}
+                      autoComplete={field.key === "phone" ? "tel" : undefined}
                       className="w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-white outline-none"
                     />
                   </label>
@@ -609,8 +618,13 @@ export default function RidersPage() {
                         onChange={(event) =>
                           field.readOnly
                             ? undefined
-                            : setEditCourierForm((current) => ({ ...current, [field.key]: event.target.value }))
+                            : setEditCourierForm((current) => ({
+                                ...current,
+                                [field.key]: field.key === "phone" ? sanitizePhone(event.target.value) : event.target.value
+                              }))
                         }
+                        inputMode={field.key === "phone" ? "tel" : undefined}
+                        autoComplete={field.key === "phone" ? "tel" : undefined}
                         className={`w-full rounded-2xl border border-slate-700 px-4 py-3 text-white outline-none ${
                           field.readOnly ? "bg-slate-950/70 text-slate-500" : "bg-slate-900"
                         }`}

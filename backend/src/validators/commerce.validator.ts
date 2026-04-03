@@ -1,6 +1,12 @@
 import { MenuItemStatus, PaymentMethod } from "../generated/prisma/client";
 import { z } from "zod";
 
+const phoneSchema = z
+  .string()
+  .min(8)
+  .max(30)
+  .regex(/^[\d+\-\s()]+$/, "Phone number can only contain numbers and common phone symbols");
+
 export const addCartItemSchema = z.object({
   restaurantId: z.string().min(1),
   menuItemId: z.string().min(1),
@@ -158,7 +164,7 @@ export const adminCreateVendorSchema = z.object({
   firstName: z.string().min(2).max(80),
   lastName: z.string().min(2).max(80),
   email: z.string().email(),
-  phone: z.string().min(8).max(30).optional(),
+  phone: phoneSchema.optional(),
   password: z.string().min(8).max(120),
   businessName: z.string().min(2).max(120)
 });
@@ -167,7 +173,7 @@ export const adminCreateRiderSchema = z.object({
   firstName: z.string().min(2).max(80),
   lastName: z.string().min(2).max(80),
   email: z.string().email(),
-  phone: z.string().min(8).max(30).optional(),
+  phone: phoneSchema.optional(),
   password: z.string().min(8).max(120),
   vehicleType: z.string().max(80).optional()
 });
@@ -180,7 +186,7 @@ export const adminReviewRiderSchema = z.object({
 export const adminUpdateRiderSchema = z.object({
   firstName: z.string().min(2).max(80).optional(),
   lastName: z.string().min(2).max(80).optional(),
-  phone: z.string().min(8).max(30).nullable().optional(),
+  phone: phoneSchema.nullable().optional(),
   vehicleType: z.string().max(80).nullable().optional(),
   isOnline: z.boolean().optional(),
   isActive: z.boolean().optional()

@@ -205,6 +205,10 @@ function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: nu
   };
 }
 
+function sanitizePhone(value: string) {
+  return value.replace(/[^\d+\-\s()]/g, "");
+}
+
 function BikeCourierAnimation() {
   const travel = useRef(new Animated.Value(0)).current;
   const bob = useRef(new Animated.Value(0)).current;
@@ -954,7 +958,7 @@ function AppContent() {
               <>
                 <TextInput value={firstName} onChangeText={setFirstName} placeholder="First name" placeholderTextColor="#9ca3af" style={styles.input} />
                 <TextInput value={lastName} onChangeText={setLastName} placeholder="Last name" placeholderTextColor="#9ca3af" style={styles.input} />
-                <TextInput value={phone} onChangeText={setPhone} placeholder="Phone number" placeholderTextColor="#9ca3af" style={styles.input} />
+                <TextInput value={phone} onChangeText={(value) => setPhone(sanitizePhone(value))} placeholder="Phone number" placeholderTextColor="#9ca3af" style={styles.input} keyboardType="phone-pad" />
                 <TextInput value={vehicleType} onChangeText={setVehicleType} placeholder="Vehicle type" placeholderTextColor="#9ca3af" style={styles.input} />
               </>
             ) : null}

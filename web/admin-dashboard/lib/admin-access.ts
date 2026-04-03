@@ -7,6 +7,7 @@ import {
   Bike,
   ClipboardCheck,
   FileText,
+  Gift,
   LayoutDashboard,
   PackageCheck,
   Settings,
@@ -39,6 +40,7 @@ export type AdminArea =
   | "restaurants"
   | "reports"
   | "finance"
+  | "promotions"
   | "notifications"
   | "settings";
 
@@ -51,16 +53,17 @@ type NavigationItem = {
 };
 
 const allNavigationItems: NavigationItem[] = [
-  { area: "overview", href: "/", label: "Overview", icon: LayoutDashboard, section: "primary" },
+  { area: "overview", href: "/", label: "Dashboard", icon: LayoutDashboard, section: "primary" },
   { area: "orders", href: "/orders", label: "Orders", icon: ShoppingBag, section: "primary" },
   { area: "vendors", href: "/vendors", label: "Vendors", icon: Store, section: "primary" },
   { area: "riders", href: "/riders", label: "Riders", icon: Bike, section: "primary" },
-  { area: "users", href: "/users", label: "Users", icon: Users, section: "primary" },
+  { area: "users", href: "/users", label: "Customers", icon: Users, section: "primary" },
   { area: "approvals", href: "/approvals", label: "Approvals", icon: ClipboardCheck, section: "primary" },
   { area: "restaurants", href: "/restaurants", label: "Restaurants", icon: UtensilsCrossed, section: "primary" },
+  { area: "finance", href: "/finance", label: "Finance", icon: Wallet, section: "primary" },
+  { area: "promotions", href: "/promotions", label: "Promotions", icon: Gift, section: "primary" },
   { area: "analytics", href: "/analytics", label: "Analytics", icon: BarChart2, section: "secondary" },
   { area: "reports", href: "/reports", label: "Reports", icon: FileText, section: "secondary" },
-  { area: "finance", href: "/finance", label: "Finance", icon: Wallet, section: "secondary" },
   { area: "notifications", href: "/notifications", label: "Notifications", icon: Bell, section: "secondary" },
   { area: "compliance", href: "/compliance", label: "Compliance", icon: Shield, section: "secondary" },
   { area: "settings", href: "/settings", label: "Settings", icon: Settings, section: "secondary" }
@@ -79,12 +82,13 @@ const allowedAreasByTitle: Record<AdminManagerTitle, AdminArea[]> = {
     "restaurants",
     "reports",
     "finance",
+    "promotions",
     "notifications",
     "settings"
   ],
   "Admin User Manager": ["overview", "users", "analytics", "reports", "settings"],
   "Admin Rider Manager": ["overview", "riders", "approvals", "analytics", "reports", "settings"],
-  "Admin Finance Manager": ["overview", "finance", "analytics", "reports", "settings"],
+  "Admin Finance Manager": ["overview", "orders", "vendors", "riders", "users", "finance", "promotions", "reports", "settings"],
   "Admin Customer Service Manager": ["overview", "orders", "compliance", "notifications", "analytics", "reports", "settings"],
   "Admin Vendor Manager": ["overview", "vendors", "restaurants", "compliance", "approvals", "analytics", "reports", "settings"]
 };
@@ -120,10 +124,34 @@ export function hasAdminAccess(session: AdminSession | null | undefined, area: A
 }
 
 export function getAdminNavigation(session: AdminSession | null | undefined) {
+  const title = getAdminManagerTitle(session);
+
+  if (!isSuperAdmin(session) && title === "Admin Finance Manager") {
+    const financeMenuOrder: AdminArea[] = [
+      "overview",
+      "orders",
+      "vendors",
+      "riders",
+      "users",
+      "finance",
+      "promotions",
+      "reports",
+      "settings"
+    ];
+
+    const items = financeMenuOrder
+      .map((area) => allNavigationItems.find((item) => item.area === area))
+      .filter((item): item is NavigationItem => Boolean(item));
+
+    return {
+      primary: items.filter((item) => item.area !== "reports" && item.area !== "settings"),
+      secondary: items.filter((item) => item.area === "reports" || item.area === "settings")
+    };
+  }
+
   const items = isSuperAdmin(session)
     ? allNavigationItems
     : allNavigationItems.filter((item) => {
-        const title = getAdminManagerTitle(session);
         return allowedAreasByTitle[title].includes(item.area);
       });
 
@@ -142,13 +170,14 @@ export const superAdminOverviewCards = [
   { area: "orders", label: "Orders", icon: ShoppingBag },
   { area: "vendors", label: "Vendors", icon: Store },
   { area: "riders", label: "Riders", icon: Bike },
-  { area: "users", label: "Users", icon: Users },
+  { area: "users", label: "Customers", icon: Users },
   { area: "approvals", label: "Approvals", icon: ClipboardCheck },
   { area: "restaurants", label: "Restaurants", icon: UtensilsCrossed },
   { area: "analytics", label: "Analytics", icon: BarChart2 },
   { area: "reports", label: "Reports", icon: FileText },
   { area: "notifications", label: "Notifications", icon: Bell },
   { area: "finance", label: "Finance", icon: Wallet },
+  { area: "promotions", label: "Promotions", icon: Gift },
   { area: "compliance", label: "Compliance", icon: Shield },
   { area: "settings", label: "Settings", icon: PackageCheck }
 ] as const;

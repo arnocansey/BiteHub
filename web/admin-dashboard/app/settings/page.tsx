@@ -204,11 +204,26 @@ export default function SettingsPage() {
 
   return (
     <DashboardShell
-      title="Platform settings"
-      description="Control commissions, payout rules, payment methods, and subscription plans from one operational workspace."
+      title="Admin settings"
+      description="Admin controls system settings, including payment methods, commission rates, delivery fees, app notifications, language controls, and security defaults."
       session={session}
     >
       <form className="space-y-6" onSubmit={handleSubmit}>
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {[
+            "Payment Methods",
+            "Commission Rates",
+            "Delivery Fees",
+            "App Notifications",
+            "Language Settings",
+            "Security Settings"
+          ].map((item) => (
+            <div key={item} className="rounded-3xl bg-white p-5 shadow-sm">
+              <p className="text-sm font-semibold text-slate-900">{item}</p>
+            </div>
+          ))}
+        </section>
+
         <section className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
           <div className="rounded-[2rem] bg-white p-6 shadow-sm">
             <div className="mb-6">

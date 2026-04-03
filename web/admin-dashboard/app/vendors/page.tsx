@@ -45,6 +45,10 @@ function formatCompactCedis(value: number) {
   return `GHS ${value.toLocaleString()}`;
 }
 
+function sanitizePhone(value: string) {
+  return value.replace(/[^\d+\-\s()]/g, "");
+}
+
 export default function VendorsPage() {
   const { session, ready } = useAdminSessionState();
   const query = useAdminData(
@@ -249,8 +253,10 @@ export default function VendorsPage() {
             />
             <input
               value={createForm.phone}
-              onChange={(event) => setCreateForm((current) => ({ ...current, phone: event.target.value }))}
+              onChange={(event) => setCreateForm((current) => ({ ...current, phone: sanitizePhone(event.target.value) }))}
               placeholder="Phone number"
+              inputMode="tel"
+              autoComplete="tel"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-orange-400"
             />
             <input

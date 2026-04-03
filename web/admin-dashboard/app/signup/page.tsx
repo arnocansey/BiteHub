@@ -15,6 +15,10 @@ const adminTypes = [
   "Admin Vendor Manager"
 ] as const;
 
+function sanitizePhone(value: string) {
+  return value.replace(/[^\d+\-\s()]/g, "");
+}
+
 export default function SignupPage() {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
@@ -143,8 +147,10 @@ export default function SignupPage() {
             <input
               type="tel"
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(event) => setPhone(sanitizePhone(event.target.value))}
               placeholder="Phone number"
+              inputMode="tel"
+              autoComplete="tel"
               className="w-full rounded-2xl border border-slate-200 px-4 py-3 outline-none transition focus:border-orange-400"
             />
             <select

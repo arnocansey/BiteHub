@@ -5,12 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import {
   BarChart2,
   Bike,
+  Gift,
   Package,
   ShoppingBag,
   Star,
   Store,
   TrendingUp,
-  Users
+  Users,
+  Wallet
 } from "lucide-react";
 import {
   AccessDeniedCard,
@@ -217,18 +219,31 @@ export default function HomePage() {
   const orders = (ordersQuery.data ?? []).filter((order) => isWithinAdminDateRange(order.placedAt, activeRange));
   const topOrders = orders.slice(0, 6);
   const managerTitle = getAdminManagerTitle(session);
+  const financeManagerView = managerTitle === "Admin Finance Manager";
   const topHeatZones = (opsQuery.data?.heatmap ?? []).slice(0, 6);
   const liveRiders = liveRidersQuery.data ?? [];
   const restaurants = (restaurantsQuery.data ?? []).slice(0, 12);
+  const financeMetrics = [
+    { label: "Revenue", value: `GHS ${(reportQuery.data?.revenue ?? 0).toLocaleString()}`, icon: Wallet },
+    { label: "Transactions", value: reportQuery.data?.transactions ?? 0, icon: ShoppingBag },
+    { label: "Customers", value: overviewQuery.data?.users ?? 0, icon: Users },
+    { label: "Vendors", value: overviewQuery.data?.restaurants ?? 0, icon: Store },
+    { label: "Riders Online", value: liveRiders.length, icon: Bike },
+    { label: "Promotions", value: opsQuery.data?.activeRiderIncentives ?? 0, icon: Gift }
+  ];
 
   return (
     <DashboardShell
-      title="Live operations overview"
-      description={`This workspace follows the BiteHub admin UI and adapts what each manager sees. ${managerTitle} accounts land in a focused control surface instead of a one-size-fits-all dashboard. The current header filter is applied to order-driven sections here.`}
+      title={financeManagerView ? "Finance manager overview" : "Live operations overview"}
+      description={
+        financeManagerView
+          ? "This workspace is tailored for the Admin Finance Manager, with a direct focus on revenue, customers, vendors, riders, promotions, and report-driving business health."
+          : `This workspace follows the BiteHub admin UI and adapts what each manager sees. ${managerTitle} accounts land in a focused control surface instead of a one-size-fits-all dashboard. The current header filter is applied to order-driven sections here.`
+      }
       session={session}
     >
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
+        {(financeManagerView ? financeMetrics : metrics).map((metric) => (
           <article key={metric.label} className="rounded-3xl bg-white p-5 shadow-sm">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100">
               <metric.icon className="h-5 w-5 text-orange-500" />
@@ -242,7 +257,7 @@ export default function HomePage() {
       <section className="grid gap-4 xl:grid-cols-[1.8fr_1fr]">
         <article className="rounded-3xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900">Latest orders</h2>
+            <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Finance-linked orders" : "Latest orders"}</h2>
             <p className="text-sm text-slate-500">{orders.length} total</p>
           </div>
           {topOrders.length ? (
@@ -275,10 +290,10 @@ export default function HomePage() {
         </article>
 
         <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-900">Queue snapshot</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Business snapshot" : "Queue snapshot"}</h2>
           <div className="mt-6 space-y-3 text-sm">
             <div className="flex items-center justify-between rounded-2xl bg-amber-50 px-4 py-3">
-              <span>Pending vendors</span>
+              <span>{financeManagerView ? "Pending vendors" : "Pending vendors"}</span>
               <strong>{approvalsQuery.data?.vendors.length ?? 0}</strong>
             </div>
             <div className="flex items-center justify-between rounded-2xl bg-sky-50 px-4 py-3">
@@ -294,8 +309,8 @@ export default function HomePage() {
               <strong>{trustQuery.data?.overview.openSupportTickets ?? 0}</strong>
             </div>
             <div className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3">
-              <span>Busy or paused restaurants</span>
-              <strong>{trustQuery.data?.overview.stressedRestaurants ?? 0}</strong>
+              <span>{financeManagerView ? "Promotions running" : "Busy or paused restaurants"}</span>
+              <strong>{financeManagerView ? opsQuery.data?.activeRiderIncentives ?? 0 : trustQuery.data?.overview.stressedRestaurants ?? 0}</strong>
             </div>
           </div>
         </article>
@@ -303,7 +318,7 @@ export default function HomePage() {
 
       <section className="rounded-3xl bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-slate-900">Trust and recovery queue</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Customer and risk signals" : "Trust and recovery queue"}</h2>
           <p className="text-sm text-slate-500">
             Low-confidence ETAs: {trustQuery.data?.overview.lowConfidenceEtas ?? 0}
           </p>
@@ -335,7 +350,7 @@ export default function HomePage() {
       <section className="grid gap-4 xl:grid-cols-[1.35fr_1fr_1fr]">
         <article className="rounded-3xl bg-white p-6 shadow-sm">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-slate-900">Demand heatmap</h2>
+            <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Market demand map" : "Demand heatmap"}</h2>
             <p className="text-sm text-slate-500">
               {opsQuery.data?.activeRiderIncentives ?? 0} active rider incentives
             </p>
@@ -370,7 +385,7 @@ export default function HomePage() {
         </article>
 
         <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-900">Forecast windows</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Vendor performance windows" : "Forecast windows"}</h2>
           <div className="mt-6 space-y-3">
             {(opsQuery.data?.forecasts ?? []).slice(0, 4).map((forecast) => (
               <div key={forecast.id} className="rounded-2xl bg-slate-50 p-4">
@@ -385,7 +400,7 @@ export default function HomePage() {
         </article>
 
         <article className="rounded-3xl bg-white p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-slate-900">Quality signals</h2>
+          <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Rider and customer growth signals" : "Quality signals"}</h2>
           <div className="mt-6 space-y-3">
             {(opsQuery.data?.qualityScores ?? []).slice(0, 4).map((score) => (
               <div key={score.id} className="rounded-2xl bg-slate-50 p-4">
