@@ -31,6 +31,9 @@ export type PlatformSettingsAvgAggregateOutputType = {
   riderCommissionRate: runtime.Decimal | null
   serviceFeeRate: runtime.Decimal | null
   taxRate: runtime.Decimal | null
+  rideBaseFare: runtime.Decimal | null
+  rideDistanceRatePerKm: runtime.Decimal | null
+  rideTimeRatePerMinute: runtime.Decimal | null
   payoutDelayDays: number | null
   minimumPayoutAmount: runtime.Decimal | null
   defaultTrialDays: number | null
@@ -41,6 +44,9 @@ export type PlatformSettingsSumAggregateOutputType = {
   riderCommissionRate: runtime.Decimal | null
   serviceFeeRate: runtime.Decimal | null
   taxRate: runtime.Decimal | null
+  rideBaseFare: runtime.Decimal | null
+  rideDistanceRatePerKm: runtime.Decimal | null
+  rideTimeRatePerMinute: runtime.Decimal | null
   payoutDelayDays: number | null
   minimumPayoutAmount: runtime.Decimal | null
   defaultTrialDays: number | null
@@ -55,6 +61,9 @@ export type PlatformSettingsMinAggregateOutputType = {
   riderCommissionRate: runtime.Decimal | null
   serviceFeeRate: runtime.Decimal | null
   taxRate: runtime.Decimal | null
+  rideBaseFare: runtime.Decimal | null
+  rideDistanceRatePerKm: runtime.Decimal | null
+  rideTimeRatePerMinute: runtime.Decimal | null
   payoutDelayDays: number | null
   minimumPayoutAmount: runtime.Decimal | null
   platformSubscriptionEnabled: boolean | null
@@ -72,6 +81,9 @@ export type PlatformSettingsMaxAggregateOutputType = {
   riderCommissionRate: runtime.Decimal | null
   serviceFeeRate: runtime.Decimal | null
   taxRate: runtime.Decimal | null
+  rideBaseFare: runtime.Decimal | null
+  rideDistanceRatePerKm: runtime.Decimal | null
+  rideTimeRatePerMinute: runtime.Decimal | null
   payoutDelayDays: number | null
   minimumPayoutAmount: runtime.Decimal | null
   platformSubscriptionEnabled: boolean | null
@@ -90,6 +102,9 @@ export type PlatformSettingsCountAggregateOutputType = {
   riderCommissionRate: number
   serviceFeeRate: number
   taxRate: number
+  rideBaseFare: number
+  rideDistanceRatePerKm: number
+  rideTimeRatePerMinute: number
   payoutDelayDays: number
   minimumPayoutAmount: number
   platformSubscriptionEnabled: number
@@ -105,6 +120,9 @@ export type PlatformSettingsAvgAggregateInputType = {
   riderCommissionRate?: true
   serviceFeeRate?: true
   taxRate?: true
+  rideBaseFare?: true
+  rideDistanceRatePerKm?: true
+  rideTimeRatePerMinute?: true
   payoutDelayDays?: true
   minimumPayoutAmount?: true
   defaultTrialDays?: true
@@ -115,6 +133,9 @@ export type PlatformSettingsSumAggregateInputType = {
   riderCommissionRate?: true
   serviceFeeRate?: true
   taxRate?: true
+  rideBaseFare?: true
+  rideDistanceRatePerKm?: true
+  rideTimeRatePerMinute?: true
   payoutDelayDays?: true
   minimumPayoutAmount?: true
   defaultTrialDays?: true
@@ -129,6 +150,9 @@ export type PlatformSettingsMinAggregateInputType = {
   riderCommissionRate?: true
   serviceFeeRate?: true
   taxRate?: true
+  rideBaseFare?: true
+  rideDistanceRatePerKm?: true
+  rideTimeRatePerMinute?: true
   payoutDelayDays?: true
   minimumPayoutAmount?: true
   platformSubscriptionEnabled?: true
@@ -146,6 +170,9 @@ export type PlatformSettingsMaxAggregateInputType = {
   riderCommissionRate?: true
   serviceFeeRate?: true
   taxRate?: true
+  rideBaseFare?: true
+  rideDistanceRatePerKm?: true
+  rideTimeRatePerMinute?: true
   payoutDelayDays?: true
   minimumPayoutAmount?: true
   platformSubscriptionEnabled?: true
@@ -164,6 +191,9 @@ export type PlatformSettingsCountAggregateInputType = {
   riderCommissionRate?: true
   serviceFeeRate?: true
   taxRate?: true
+  rideBaseFare?: true
+  rideDistanceRatePerKm?: true
+  rideTimeRatePerMinute?: true
   payoutDelayDays?: true
   minimumPayoutAmount?: true
   platformSubscriptionEnabled?: true
@@ -269,6 +299,9 @@ export type PlatformSettingsGroupByOutputType = {
   riderCommissionRate: runtime.Decimal
   serviceFeeRate: runtime.Decimal
   taxRate: runtime.Decimal
+  rideBaseFare: runtime.Decimal
+  rideDistanceRatePerKm: runtime.Decimal
+  rideTimeRatePerMinute: runtime.Decimal
   payoutDelayDays: number
   minimumPayoutAmount: runtime.Decimal
   platformSubscriptionEnabled: boolean
@@ -310,6 +343,9 @@ export type PlatformSettingsWhereInput = {
   riderCommissionRate?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFilter<"PlatformSettings"> | number
   minimumPayoutAmount?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFilter<"PlatformSettings"> | boolean
@@ -329,6 +365,9 @@ export type PlatformSettingsOrderByWithRelationInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   platformSubscriptionEnabled?: Prisma.SortOrder
@@ -351,6 +390,9 @@ export type PlatformSettingsWhereUniqueInput = Prisma.AtLeast<{
   riderCommissionRate?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFilter<"PlatformSettings"> | number
   minimumPayoutAmount?: Prisma.DecimalFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFilter<"PlatformSettings"> | boolean
@@ -370,6 +412,9 @@ export type PlatformSettingsOrderByWithAggregationInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   platformSubscriptionEnabled?: Prisma.SortOrder
@@ -396,6 +441,9 @@ export type PlatformSettingsScalarWhereWithAggregatesInput = {
   riderCommissionRate?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntWithAggregatesFilter<"PlatformSettings"> | number
   minimumPayoutAmount?: Prisma.DecimalWithAggregatesFilter<"PlatformSettings"> | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolWithAggregatesFilter<"PlatformSettings"> | boolean
@@ -414,6 +462,9 @@ export type PlatformSettingsCreateInput = {
   riderCommissionRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: number
   minimumPayoutAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: boolean
@@ -433,6 +484,9 @@ export type PlatformSettingsUncheckedCreateInput = {
   riderCommissionRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: number
   minimumPayoutAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: boolean
@@ -452,6 +506,9 @@ export type PlatformSettingsUpdateInput = {
   riderCommissionRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFieldUpdateOperationsInput | number
   minimumPayoutAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -471,6 +528,9 @@ export type PlatformSettingsUncheckedUpdateInput = {
   riderCommissionRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFieldUpdateOperationsInput | number
   minimumPayoutAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -490,6 +550,9 @@ export type PlatformSettingsCreateManyInput = {
   riderCommissionRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: number
   minimumPayoutAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: boolean
@@ -508,6 +571,9 @@ export type PlatformSettingsUpdateManyMutationInput = {
   riderCommissionRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFieldUpdateOperationsInput | number
   minimumPayoutAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -526,6 +592,9 @@ export type PlatformSettingsUncheckedUpdateManyInput = {
   riderCommissionRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFieldUpdateOperationsInput | number
   minimumPayoutAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -552,6 +621,9 @@ export type PlatformSettingsCountOrderByAggregateInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   platformSubscriptionEnabled?: Prisma.SortOrder
@@ -565,6 +637,9 @@ export type PlatformSettingsAvgOrderByAggregateInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   defaultTrialDays?: Prisma.SortOrder
@@ -579,6 +654,9 @@ export type PlatformSettingsMaxOrderByAggregateInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   platformSubscriptionEnabled?: Prisma.SortOrder
@@ -596,6 +674,9 @@ export type PlatformSettingsMinOrderByAggregateInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   platformSubscriptionEnabled?: Prisma.SortOrder
@@ -609,6 +690,9 @@ export type PlatformSettingsSumOrderByAggregateInput = {
   riderCommissionRate?: Prisma.SortOrder
   serviceFeeRate?: Prisma.SortOrder
   taxRate?: Prisma.SortOrder
+  rideBaseFare?: Prisma.SortOrder
+  rideDistanceRatePerKm?: Prisma.SortOrder
+  rideTimeRatePerMinute?: Prisma.SortOrder
   payoutDelayDays?: Prisma.SortOrder
   minimumPayoutAmount?: Prisma.SortOrder
   defaultTrialDays?: Prisma.SortOrder
@@ -656,6 +740,9 @@ export type PlatformSettingsCreateWithoutSubscriptionsInput = {
   riderCommissionRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: number
   minimumPayoutAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: boolean
@@ -674,6 +761,9 @@ export type PlatformSettingsUncheckedCreateWithoutSubscriptionsInput = {
   riderCommissionRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: number
   minimumPayoutAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: boolean
@@ -708,6 +798,9 @@ export type PlatformSettingsUpdateWithoutSubscriptionsInput = {
   riderCommissionRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFieldUpdateOperationsInput | number
   minimumPayoutAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -726,6 +819,9 @@ export type PlatformSettingsUncheckedUpdateWithoutSubscriptionsInput = {
   riderCommissionRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   serviceFeeRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   taxRate?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideBaseFare?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideDistanceRatePerKm?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
+  rideTimeRatePerMinute?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   payoutDelayDays?: Prisma.IntFieldUpdateOperationsInput | number
   minimumPayoutAmount?: Prisma.DecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string
   platformSubscriptionEnabled?: Prisma.BoolFieldUpdateOperationsInput | boolean
@@ -775,6 +871,9 @@ export type PlatformSettingsSelect<ExtArgs extends runtime.Types.Extensions.Inte
   riderCommissionRate?: boolean
   serviceFeeRate?: boolean
   taxRate?: boolean
+  rideBaseFare?: boolean
+  rideDistanceRatePerKm?: boolean
+  rideTimeRatePerMinute?: boolean
   payoutDelayDays?: boolean
   minimumPayoutAmount?: boolean
   platformSubscriptionEnabled?: boolean
@@ -795,6 +894,9 @@ export type PlatformSettingsSelectCreateManyAndReturn<ExtArgs extends runtime.Ty
   riderCommissionRate?: boolean
   serviceFeeRate?: boolean
   taxRate?: boolean
+  rideBaseFare?: boolean
+  rideDistanceRatePerKm?: boolean
+  rideTimeRatePerMinute?: boolean
   payoutDelayDays?: boolean
   minimumPayoutAmount?: boolean
   platformSubscriptionEnabled?: boolean
@@ -813,6 +915,9 @@ export type PlatformSettingsSelectUpdateManyAndReturn<ExtArgs extends runtime.Ty
   riderCommissionRate?: boolean
   serviceFeeRate?: boolean
   taxRate?: boolean
+  rideBaseFare?: boolean
+  rideDistanceRatePerKm?: boolean
+  rideTimeRatePerMinute?: boolean
   payoutDelayDays?: boolean
   minimumPayoutAmount?: boolean
   platformSubscriptionEnabled?: boolean
@@ -831,6 +936,9 @@ export type PlatformSettingsSelectScalar = {
   riderCommissionRate?: boolean
   serviceFeeRate?: boolean
   taxRate?: boolean
+  rideBaseFare?: boolean
+  rideDistanceRatePerKm?: boolean
+  rideTimeRatePerMinute?: boolean
   payoutDelayDays?: boolean
   minimumPayoutAmount?: boolean
   platformSubscriptionEnabled?: boolean
@@ -839,7 +947,7 @@ export type PlatformSettingsSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PlatformSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "key" | "dispatchMode" | "supportEmail" | "paymentMethods" | "vendorCommissionRate" | "riderCommissionRate" | "serviceFeeRate" | "taxRate" | "payoutDelayDays" | "minimumPayoutAmount" | "platformSubscriptionEnabled" | "defaultTrialDays" | "createdAt" | "updatedAt", ExtArgs["result"]["platformSettings"]>
+export type PlatformSettingsOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "key" | "dispatchMode" | "supportEmail" | "paymentMethods" | "vendorCommissionRate" | "riderCommissionRate" | "serviceFeeRate" | "taxRate" | "rideBaseFare" | "rideDistanceRatePerKm" | "rideTimeRatePerMinute" | "payoutDelayDays" | "minimumPayoutAmount" | "platformSubscriptionEnabled" | "defaultTrialDays" | "createdAt" | "updatedAt", ExtArgs["result"]["platformSettings"]>
 export type PlatformSettingsInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   subscriptions?: boolean | Prisma.PlatformSettings$subscriptionsArgs<ExtArgs>
   _count?: boolean | Prisma.PlatformSettingsCountOutputTypeDefaultArgs<ExtArgs>
@@ -862,6 +970,9 @@ export type $PlatformSettingsPayload<ExtArgs extends runtime.Types.Extensions.In
     riderCommissionRate: runtime.Decimal
     serviceFeeRate: runtime.Decimal
     taxRate: runtime.Decimal
+    rideBaseFare: runtime.Decimal
+    rideDistanceRatePerKm: runtime.Decimal
+    rideTimeRatePerMinute: runtime.Decimal
     payoutDelayDays: number
     minimumPayoutAmount: runtime.Decimal
     platformSubscriptionEnabled: boolean
@@ -1301,6 +1412,9 @@ export interface PlatformSettingsFieldRefs {
   readonly riderCommissionRate: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
   readonly serviceFeeRate: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
   readonly taxRate: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
+  readonly rideBaseFare: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
+  readonly rideDistanceRatePerKm: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
+  readonly rideTimeRatePerMinute: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
   readonly payoutDelayDays: Prisma.FieldRef<"PlatformSettings", 'Int'>
   readonly minimumPayoutAmount: Prisma.FieldRef<"PlatformSettings", 'Decimal'>
   readonly platformSubscriptionEnabled: Prisma.FieldRef<"PlatformSettings", 'Boolean'>

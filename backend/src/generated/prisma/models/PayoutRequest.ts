@@ -47,6 +47,8 @@ export type PayoutRequestMinAggregateOutputType = {
   approvedAmount: runtime.Decimal | null
   note: string | null
   adminNote: string | null
+  payoutMethod: string | null
+  payoutReference: string | null
   reviewedById: string | null
   reviewedAt: Date | null
   paidAt: Date | null
@@ -65,6 +67,8 @@ export type PayoutRequestMaxAggregateOutputType = {
   approvedAmount: runtime.Decimal | null
   note: string | null
   adminNote: string | null
+  payoutMethod: string | null
+  payoutReference: string | null
   reviewedById: string | null
   reviewedAt: Date | null
   paidAt: Date | null
@@ -83,6 +87,8 @@ export type PayoutRequestCountAggregateOutputType = {
   approvedAmount: number
   note: number
   adminNote: number
+  payoutMethod: number
+  payoutReference: number
   reviewedById: number
   reviewedAt: number
   paidAt: number
@@ -113,6 +119,8 @@ export type PayoutRequestMinAggregateInputType = {
   approvedAmount?: true
   note?: true
   adminNote?: true
+  payoutMethod?: true
+  payoutReference?: true
   reviewedById?: true
   reviewedAt?: true
   paidAt?: true
@@ -131,6 +139,8 @@ export type PayoutRequestMaxAggregateInputType = {
   approvedAmount?: true
   note?: true
   adminNote?: true
+  payoutMethod?: true
+  payoutReference?: true
   reviewedById?: true
   reviewedAt?: true
   paidAt?: true
@@ -149,6 +159,8 @@ export type PayoutRequestCountAggregateInputType = {
   approvedAmount?: true
   note?: true
   adminNote?: true
+  payoutMethod?: true
+  payoutReference?: true
   reviewedById?: true
   reviewedAt?: true
   paidAt?: true
@@ -254,6 +266,8 @@ export type PayoutRequestGroupByOutputType = {
   approvedAmount: runtime.Decimal | null
   note: string | null
   adminNote: string | null
+  payoutMethod: string | null
+  payoutReference: string | null
   reviewedById: string | null
   reviewedAt: Date | null
   paidAt: Date | null
@@ -295,6 +309,8 @@ export type PayoutRequestWhereInput = {
   approvedAmount?: Prisma.DecimalNullableFilter<"PayoutRequest"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   adminNote?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
+  payoutMethod?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
+  payoutReference?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   reviewedById?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   reviewedAt?: Prisma.DateTimeNullableFilter<"PayoutRequest"> | Date | string | null
   paidAt?: Prisma.DateTimeNullableFilter<"PayoutRequest"> | Date | string | null
@@ -317,6 +333,8 @@ export type PayoutRequestOrderByWithRelationInput = {
   approvedAmount?: Prisma.SortOrderInput | Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   adminNote?: Prisma.SortOrderInput | Prisma.SortOrder
+  payoutMethod?: Prisma.SortOrderInput | Prisma.SortOrder
+  payoutReference?: Prisma.SortOrderInput | Prisma.SortOrder
   reviewedById?: Prisma.SortOrderInput | Prisma.SortOrder
   reviewedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   paidAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -342,6 +360,8 @@ export type PayoutRequestWhereUniqueInput = Prisma.AtLeast<{
   approvedAmount?: Prisma.DecimalNullableFilter<"PayoutRequest"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   adminNote?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
+  payoutMethod?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
+  payoutReference?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   reviewedById?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   reviewedAt?: Prisma.DateTimeNullableFilter<"PayoutRequest"> | Date | string | null
   paidAt?: Prisma.DateTimeNullableFilter<"PayoutRequest"> | Date | string | null
@@ -364,6 +384,8 @@ export type PayoutRequestOrderByWithAggregationInput = {
   approvedAmount?: Prisma.SortOrderInput | Prisma.SortOrder
   note?: Prisma.SortOrderInput | Prisma.SortOrder
   adminNote?: Prisma.SortOrderInput | Prisma.SortOrder
+  payoutMethod?: Prisma.SortOrderInput | Prisma.SortOrder
+  payoutReference?: Prisma.SortOrderInput | Prisma.SortOrder
   reviewedById?: Prisma.SortOrderInput | Prisma.SortOrder
   reviewedAt?: Prisma.SortOrderInput | Prisma.SortOrder
   paidAt?: Prisma.SortOrderInput | Prisma.SortOrder
@@ -390,6 +412,8 @@ export type PayoutRequestScalarWhereWithAggregatesInput = {
   approvedAmount?: Prisma.DecimalNullableWithAggregatesFilter<"PayoutRequest"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.StringNullableWithAggregatesFilter<"PayoutRequest"> | string | null
   adminNote?: Prisma.StringNullableWithAggregatesFilter<"PayoutRequest"> | string | null
+  payoutMethod?: Prisma.StringNullableWithAggregatesFilter<"PayoutRequest"> | string | null
+  payoutReference?: Prisma.StringNullableWithAggregatesFilter<"PayoutRequest"> | string | null
   reviewedById?: Prisma.StringNullableWithAggregatesFilter<"PayoutRequest"> | string | null
   reviewedAt?: Prisma.DateTimeNullableWithAggregatesFilter<"PayoutRequest"> | Date | string | null
   paidAt?: Prisma.DateTimeNullableWithAggregatesFilter<"PayoutRequest"> | Date | string | null
@@ -405,6 +429,8 @@ export type PayoutRequestCreateInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -426,6 +452,8 @@ export type PayoutRequestUncheckedCreateInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -441,6 +469,8 @@ export type PayoutRequestUpdateInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -462,6 +492,8 @@ export type PayoutRequestUncheckedUpdateInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -480,6 +512,8 @@ export type PayoutRequestCreateManyInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -495,6 +529,8 @@ export type PayoutRequestUpdateManyMutationInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -512,6 +548,8 @@ export type PayoutRequestUncheckedUpdateManyInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -540,6 +578,8 @@ export type PayoutRequestCountOrderByAggregateInput = {
   approvedAmount?: Prisma.SortOrder
   note?: Prisma.SortOrder
   adminNote?: Prisma.SortOrder
+  payoutMethod?: Prisma.SortOrder
+  payoutReference?: Prisma.SortOrder
   reviewedById?: Prisma.SortOrder
   reviewedAt?: Prisma.SortOrder
   paidAt?: Prisma.SortOrder
@@ -563,6 +603,8 @@ export type PayoutRequestMaxOrderByAggregateInput = {
   approvedAmount?: Prisma.SortOrder
   note?: Prisma.SortOrder
   adminNote?: Prisma.SortOrder
+  payoutMethod?: Prisma.SortOrder
+  payoutReference?: Prisma.SortOrder
   reviewedById?: Prisma.SortOrder
   reviewedAt?: Prisma.SortOrder
   paidAt?: Prisma.SortOrder
@@ -581,6 +623,8 @@ export type PayoutRequestMinOrderByAggregateInput = {
   approvedAmount?: Prisma.SortOrder
   note?: Prisma.SortOrder
   adminNote?: Prisma.SortOrder
+  payoutMethod?: Prisma.SortOrder
+  payoutReference?: Prisma.SortOrder
   reviewedById?: Prisma.SortOrder
   reviewedAt?: Prisma.SortOrder
   paidAt?: Prisma.SortOrder
@@ -777,6 +821,8 @@ export type PayoutRequestCreateWithoutRequesterInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -796,6 +842,8 @@ export type PayoutRequestUncheckedCreateWithoutRequesterInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -821,6 +869,8 @@ export type PayoutRequestCreateWithoutReviewedByInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -841,6 +891,8 @@ export type PayoutRequestUncheckedCreateWithoutReviewedByInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -887,6 +939,8 @@ export type PayoutRequestScalarWhereInput = {
   approvedAmount?: Prisma.DecimalNullableFilter<"PayoutRequest"> | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   adminNote?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
+  payoutMethod?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
+  payoutReference?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   reviewedById?: Prisma.StringNullableFilter<"PayoutRequest"> | string | null
   reviewedAt?: Prisma.DateTimeNullableFilter<"PayoutRequest"> | Date | string | null
   paidAt?: Prisma.DateTimeNullableFilter<"PayoutRequest"> | Date | string | null
@@ -918,6 +972,8 @@ export type PayoutRequestCreateWithoutVendorProfileInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -937,6 +993,8 @@ export type PayoutRequestUncheckedCreateWithoutVendorProfileInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -978,6 +1036,8 @@ export type PayoutRequestCreateWithoutRiderProfileInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -997,6 +1057,8 @@ export type PayoutRequestUncheckedCreateWithoutRiderProfileInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -1040,6 +1102,8 @@ export type PayoutRequestCreateManyRequesterInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -1058,6 +1122,8 @@ export type PayoutRequestCreateManyReviewedByInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
   createdAt?: Date | string
@@ -1072,6 +1138,8 @@ export type PayoutRequestUpdateWithoutRequesterInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1091,6 +1159,8 @@ export type PayoutRequestUncheckedUpdateWithoutRequesterInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1108,6 +1178,8 @@ export type PayoutRequestUncheckedUpdateManyWithoutRequesterInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1123,6 +1195,8 @@ export type PayoutRequestUpdateWithoutReviewedByInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1143,6 +1217,8 @@ export type PayoutRequestUncheckedUpdateWithoutReviewedByInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1160,6 +1236,8 @@ export type PayoutRequestUncheckedUpdateManyWithoutReviewedByInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1176,6 +1254,8 @@ export type PayoutRequestCreateManyVendorProfileInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -1191,6 +1271,8 @@ export type PayoutRequestUpdateWithoutVendorProfileInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1210,6 +1292,8 @@ export type PayoutRequestUncheckedUpdateWithoutVendorProfileInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1227,6 +1311,8 @@ export type PayoutRequestUncheckedUpdateManyWithoutVendorProfileInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1244,6 +1330,8 @@ export type PayoutRequestCreateManyRiderProfileInput = {
   approvedAmount?: runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: string | null
   adminNote?: string | null
+  payoutMethod?: string | null
+  payoutReference?: string | null
   reviewedById?: string | null
   reviewedAt?: Date | string | null
   paidAt?: Date | string | null
@@ -1259,6 +1347,8 @@ export type PayoutRequestUpdateWithoutRiderProfileInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -1278,6 +1368,8 @@ export type PayoutRequestUncheckedUpdateWithoutRiderProfileInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1295,6 +1387,8 @@ export type PayoutRequestUncheckedUpdateManyWithoutRiderProfileInput = {
   approvedAmount?: Prisma.NullableDecimalFieldUpdateOperationsInput | runtime.Decimal | runtime.DecimalJsLike | number | string | null
   note?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   adminNote?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutMethod?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  payoutReference?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedById?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   reviewedAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
   paidAt?: Prisma.NullableDateTimeFieldUpdateOperationsInput | Date | string | null
@@ -1315,6 +1409,8 @@ export type PayoutRequestSelect<ExtArgs extends runtime.Types.Extensions.Interna
   approvedAmount?: boolean
   note?: boolean
   adminNote?: boolean
+  payoutMethod?: boolean
+  payoutReference?: boolean
   reviewedById?: boolean
   reviewedAt?: boolean
   paidAt?: boolean
@@ -1337,6 +1433,8 @@ export type PayoutRequestSelectCreateManyAndReturn<ExtArgs extends runtime.Types
   approvedAmount?: boolean
   note?: boolean
   adminNote?: boolean
+  payoutMethod?: boolean
+  payoutReference?: boolean
   reviewedById?: boolean
   reviewedAt?: boolean
   paidAt?: boolean
@@ -1359,6 +1457,8 @@ export type PayoutRequestSelectUpdateManyAndReturn<ExtArgs extends runtime.Types
   approvedAmount?: boolean
   note?: boolean
   adminNote?: boolean
+  payoutMethod?: boolean
+  payoutReference?: boolean
   reviewedById?: boolean
   reviewedAt?: boolean
   paidAt?: boolean
@@ -1381,6 +1481,8 @@ export type PayoutRequestSelectScalar = {
   approvedAmount?: boolean
   note?: boolean
   adminNote?: boolean
+  payoutMethod?: boolean
+  payoutReference?: boolean
   reviewedById?: boolean
   reviewedAt?: boolean
   paidAt?: boolean
@@ -1388,7 +1490,7 @@ export type PayoutRequestSelectScalar = {
   updatedAt?: boolean
 }
 
-export type PayoutRequestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "targetType" | "status" | "requesterUserId" | "vendorProfileId" | "riderProfileId" | "requestedAmount" | "approvedAmount" | "note" | "adminNote" | "reviewedById" | "reviewedAt" | "paidAt" | "createdAt" | "updatedAt", ExtArgs["result"]["payoutRequest"]>
+export type PayoutRequestOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "targetType" | "status" | "requesterUserId" | "vendorProfileId" | "riderProfileId" | "requestedAmount" | "approvedAmount" | "note" | "adminNote" | "payoutMethod" | "payoutReference" | "reviewedById" | "reviewedAt" | "paidAt" | "createdAt" | "updatedAt", ExtArgs["result"]["payoutRequest"]>
 export type PayoutRequestInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   requester?: boolean | Prisma.UserDefaultArgs<ExtArgs>
   reviewedBy?: boolean | Prisma.PayoutRequest$reviewedByArgs<ExtArgs>
@@ -1427,6 +1529,8 @@ export type $PayoutRequestPayload<ExtArgs extends runtime.Types.Extensions.Inter
     approvedAmount: runtime.Decimal | null
     note: string | null
     adminNote: string | null
+    payoutMethod: string | null
+    payoutReference: string | null
     reviewedById: string | null
     reviewedAt: Date | null
     paidAt: Date | null
@@ -1869,6 +1973,8 @@ export interface PayoutRequestFieldRefs {
   readonly approvedAmount: Prisma.FieldRef<"PayoutRequest", 'Decimal'>
   readonly note: Prisma.FieldRef<"PayoutRequest", 'String'>
   readonly adminNote: Prisma.FieldRef<"PayoutRequest", 'String'>
+  readonly payoutMethod: Prisma.FieldRef<"PayoutRequest", 'String'>
+  readonly payoutReference: Prisma.FieldRef<"PayoutRequest", 'String'>
   readonly reviewedById: Prisma.FieldRef<"PayoutRequest", 'String'>
   readonly reviewedAt: Prisma.FieldRef<"PayoutRequest", 'DateTime'>
   readonly paidAt: Prisma.FieldRef<"PayoutRequest", 'DateTime'>

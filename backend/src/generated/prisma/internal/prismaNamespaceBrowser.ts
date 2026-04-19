@@ -372,10 +372,13 @@ export const PromoCodeScalarFieldEnum = {
   discountPercent: 'discountPercent',
   discountAmount: 'discountAmount',
   maxDiscountAmount: 'maxDiscountAmount',
+  maxUsageCount: 'maxUsageCount',
   minOrderAmount: 'minOrderAmount',
   startsAt: 'startsAt',
   endsAt: 'endsAt',
-  isActive: 'isActive'
+  isActive: 'isActive',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
 } as const
 
 export type PromoCodeScalarFieldEnum = (typeof PromoCodeScalarFieldEnum)[keyof typeof PromoCodeScalarFieldEnum]
@@ -502,6 +505,9 @@ export const PlatformSettingsScalarFieldEnum = {
   riderCommissionRate: 'riderCommissionRate',
   serviceFeeRate: 'serviceFeeRate',
   taxRate: 'taxRate',
+  rideBaseFare: 'rideBaseFare',
+  rideDistanceRatePerKm: 'rideDistanceRatePerKm',
+  rideTimeRatePerMinute: 'rideTimeRatePerMinute',
   payoutDelayDays: 'payoutDelayDays',
   minimumPayoutAmount: 'minimumPayoutAmount',
   platformSubscriptionEnabled: 'platformSubscriptionEnabled',
@@ -599,6 +605,8 @@ export const PayoutRequestScalarFieldEnum = {
   approvedAmount: 'approvedAmount',
   note: 'note',
   adminNote: 'adminNote',
+  payoutMethod: 'payoutMethod',
+  payoutReference: 'payoutReference',
   reviewedById: 'reviewedById',
   reviewedAt: 'reviewedAt',
   paidAt: 'paidAt',
