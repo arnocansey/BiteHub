@@ -22,6 +22,7 @@ import {
   LoadingCard
 } from "../components/admin-states";
 import { DashboardShell } from "../components/dashboard-shell";
+import { GooglePlacesPanel, type GooglePlaceSelection } from "../components/google-places-panel";
 import { getAdminManagerTitle, hasAdminAccess } from "../lib/admin-access";
 import { adminRequest, useAdminData, useAdminSessionState } from "../lib/admin-client";
 import { isWithinAdminDateRange, parseAdminDateRange } from "../lib/admin-date-range";
@@ -83,6 +84,8 @@ type RestaurantRecord = {
   address?: string | null;
   averageRating?: number | null;
   isFeatured?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 };
 type Order = {
   id: string;
@@ -96,6 +99,7 @@ type Order = {
 export default function HomePage() {
   const { session, ready } = useAdminSessionState();
   const [activeRange, setActiveRange] = useState<ReturnType<typeof parseAdminDateRange>>("today");
+  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceSelection | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -361,6 +365,7 @@ export default function HomePage() {
                 zones={topHeatZones}
                 activeRiders={liveRiders}
                 restaurants={restaurants}
+                searchLocation={selectedPlace}
                 focusedZoneId={topHeatZones[0]?.id ?? null}
               />
               <div className="mt-4 space-y-3">
@@ -383,6 +388,13 @@ export default function HomePage() {
             <EmptyCard message="No heatmap zones are available yet." />
           )}
         </article>
+
+        <GooglePlacesPanel
+          title="Google Places lookup"
+          description="Search Ghana addresses and landmarks, then sync the selected location into the live operations map."
+          onPlaceSelect={setSelectedPlace}
+          heightClassName="h-[420px]"
+        />
 
         <article className="rounded-3xl bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-slate-900">{financeManagerView ? "Vendor performance windows" : "Forecast windows"}</h2>

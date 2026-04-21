@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { MapPin, Star, Store } from "lucide-react";
 import { AccessDeniedCard, AuthRequiredCard, EmptyCard, ErrorCard, LoadingCard } from "../../components/admin-states";
 import { DashboardShell } from "../../components/dashboard-shell";
+import { GooglePlacesPanel, type GooglePlaceSelection } from "../../components/google-places-panel";
 import { hasAdminAccess } from "../../lib/admin-access";
 import { adminRequest, useAdminData, useAdminSessionState } from "../../lib/admin-client";
 
@@ -47,6 +49,7 @@ function formatCompactCedis(value: number) {
 
 export default function RestaurantsPage() {
   const { session, ready } = useAdminSessionState();
+  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceSelection | null>(null);
   const query = useAdminData(() => adminRequest<RestaurantRecord[]>("/admin/restaurants"), [session?.accessToken]);
 
   if (!ready) return <LoadingCard />;
@@ -176,6 +179,24 @@ export default function RestaurantsPage() {
         </article>
 
         <aside className="space-y-4">
+          <GooglePlacesPanel
+            title="Restaurant location finder"
+            description="Look up an address or landmark with Google Places while reviewing the live restaurant catalog."
+            onPlaceSelect={setSelectedPlace}
+            heightClassName="h-[300px]"
+          />
+
+          {selectedPlace ? (
+            <article className="rounded-[28px] bg-white p-6 shadow-sm">
+              <h3 className="text-xl font-semibold text-slate-900">Selected place</h3>
+              <p className="mt-3 font-medium text-slate-900">{selectedPlace.displayName}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-500">{selectedPlace.formattedAddress}</p>
+              <p className="mt-3 text-sm font-semibold text-orange-500">
+                {selectedPlace.latitude.toFixed(5)}, {selectedPlace.longitude.toFixed(5)}
+              </p>
+            </article>
+          ) : null}
+
           <article className="rounded-[28px] bg-white p-6 shadow-sm">
             <h3 className="text-xl font-semibold text-slate-900">Collection coverage</h3>
             <div className="mt-5 space-y-3">

@@ -218,7 +218,7 @@ export function DashboardShell({
           </nav>
         </aside>
 
-        <section className="min-w-0 space-y-4 xl:h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
+        <section className="min-w-0 space-y-5 xl:h-[calc(100vh-2rem)] xl:overflow-y-auto xl:pr-1">
           {superAdmin ? (
             <div className="flex flex-wrap items-center justify-between gap-4 rounded-[28px] border border-white/10 bg-slate-950/70 px-5 py-4 shadow-[0_18px_60px_rgba(2,6,23,0.35)] backdrop-blur">
               <label className="flex min-w-[320px] flex-1 items-center gap-3 rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-500">
@@ -377,7 +377,7 @@ export function DashboardShell({
               </div>
             </div>
           </header>
-          {children}
+          <div className="pb-2 pt-1 md:pt-2">{children}</div>
         </section>
       </div>
     </main>

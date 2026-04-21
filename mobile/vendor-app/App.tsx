@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BiteHubSplash } from "./components/BiteHubSplash";
 
@@ -40,8 +41,15 @@ type ModifierGroupDraft = {
     isAvailable: boolean;
   }>;
 };
+type PlaceSuggestion = {
+  placeId: string;
+  primaryText: string;
+  secondaryText: string;
+  fullText: string;
+};
 const sessionStorageKey = "bitehub_vendor_session";
 const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
+const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -87,6 +95,36 @@ const currencyFormatter = new Intl.NumberFormat("en-GH", {
 
 function formatMoney(value: number) {
   return currencyFormatter.format(Number(value ?? 0));
+}
+
+function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: number | null }>) {
+  const valid = points.filter(
+    (point): point is { latitude: number; longitude: number } =>
+      typeof point.latitude === "number" && typeof point.longitude === "number"
+  );
+
+  if (!valid.length) {
+    return {
+      latitude: 5.6037,
+      longitude: -0.187,
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08
+    };
+  }
+
+  const latitudes = valid.map((point) => point.latitude);
+  const longitudes = valid.map((point) => point.longitude);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: Math.max(0.02, (maxLat - minLat) * 1.8 || 0.02),
+    longitudeDelta: Math.max(0.02, (maxLng - minLng) * 1.8 || 0.02)
+  };
 }
 
 function createModifierGroupDraft(): ModifierGroupDraft {
@@ -153,6 +191,52 @@ function normalizeOpeningHours(input: any) {
 
 function sanitizePhone(value: string) {
   return value.replace(/[^\d+\-\s()]/g, "");
+}
+
+async function fetchPlaceSuggestions(query: string) {
+  if (!googleMapsApiKey || query.trim().length < 3) return [];
+
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+      query.trim()
+    )}&components=country:gh&key=${googleMapsApiKey}`
+  );
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok || payload?.status === "REQUEST_DENIED") {
+    throw new Error(payload?.error_message ?? "Unable to search Google Places right now.");
+  }
+
+  return (payload?.predictions ?? []).map((prediction: any) => ({
+    placeId: prediction.place_id,
+    primaryText: prediction.structured_formatting?.main_text ?? prediction.description ?? "Selected place",
+    secondaryText: prediction.structured_formatting?.secondary_text ?? "",
+    fullText: prediction.description ?? prediction.structured_formatting?.main_text ?? "Selected place"
+  })) as PlaceSuggestion[];
+}
+
+async function fetchPlaceDetails(placeId: string) {
+  if (!googleMapsApiKey) {
+    throw new Error("Google Maps API key is missing for this app.");
+  }
+
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(
+      placeId
+    )}&fields=name,formatted_address,geometry&key=${googleMapsApiKey}`
+  );
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok || payload?.status === "REQUEST_DENIED" || !payload?.result?.geometry?.location) {
+    throw new Error(payload?.error_message ?? "Unable to load the selected place details.");
+  }
+
+  return {
+    name: payload.result.name ?? "Selected place",
+    fullAddress: payload.result.formatted_address ?? payload.result.name ?? "Selected place",
+    latitude: Number(payload.result.geometry.location.lat),
+    longitude: Number(payload.result.geometry.location.lng)
+  };
 }
 
 export default function App() {
@@ -232,6 +316,8 @@ function AppContent() {
   const [restaurantDraft, setRestaurantDraft] = useState({
     name: "",
     address: "",
+    latitude: "",
+    longitude: "",
     description: "",
     deliveryFee: "12",
     minimumOrderAmount: "25",
@@ -244,6 +330,8 @@ function AppContent() {
   const [busyOrderId, setBusyOrderId] = useState<string | null>(null);
   const [busyRestaurantId, setBusyRestaurantId] = useState<string | null>(null);
   const [lastAnnouncedOrderId, setLastAnnouncedOrderId] = useState<string | null>(null);
+  const [restaurantAddressSuggestions, setRestaurantAddressSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [restaurantAddressSearching, setRestaurantAddressSearching] = useState(false);
 
   async function refreshSessionTokens(activeSession: Session) {
     const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
@@ -623,6 +711,8 @@ function AppContent() {
     setRestaurantDraft({
       name: "",
       address: "",
+      latitude: "",
+      longitude: "",
       description: "",
       deliveryFee: "12",
       minimumOrderAmount: "25",
@@ -633,6 +723,67 @@ function AppContent() {
     });
     setEditingRestaurantId(null);
     setRestaurantFormOpen(false);
+  }
+
+  useEffect(() => {
+    if (!restaurantFormOpen || !googleMapsApiKey) {
+      setRestaurantAddressSuggestions([]);
+      setRestaurantAddressSearching(false);
+      return;
+    }
+
+    const query = restaurantDraft.address.trim();
+    if (query.length < 3) {
+      setRestaurantAddressSuggestions([]);
+      setRestaurantAddressSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setRestaurantAddressSearching(true);
+
+    const timer = setTimeout(() => {
+      void fetchPlaceSuggestions(query)
+        .then((suggestions) => {
+          if (!cancelled) {
+            setRestaurantAddressSuggestions(suggestions);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setRestaurantAddressSuggestions([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setRestaurantAddressSearching(false);
+          }
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [restaurantDraft.address, restaurantFormOpen]);
+
+  async function selectRestaurantAddressSuggestion(suggestion: PlaceSuggestion) {
+    setRestaurantAddressSearching(true);
+    setError(null);
+    try {
+      const place = await fetchPlaceDetails(suggestion.placeId);
+      setRestaurantDraft((current) => ({
+        ...current,
+        address: place.fullAddress,
+        latitude: String(place.latitude),
+        longitude: String(place.longitude)
+      }));
+      setRestaurantAddressSuggestions([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to use the selected place.");
+    } finally {
+      setRestaurantAddressSearching(false);
+    }
   }
 
   function startEditItem(item: any) {
@@ -701,7 +852,9 @@ function AppContent() {
       estimatedDeliveryMins: String(restaurant.estimatedDeliveryMins ?? 25),
       priceBand: restaurant.priceBand ?? "Mid-range",
       storyHeadline: restaurant.storyHeadline ?? "",
-      storyBody: restaurant.storyBody ?? ""
+      storyBody: restaurant.storyBody ?? "",
+      latitude: typeof restaurant.latitude === "number" ? String(restaurant.latitude) : "",
+      longitude: typeof restaurant.longitude === "number" ? String(restaurant.longitude) : ""
     });
   }
 
@@ -944,6 +1097,8 @@ function AppContent() {
       const payload = {
         name: restaurantDraft.name.trim(),
         address: restaurantDraft.address.trim(),
+        latitude: restaurantDraft.latitude.trim() ? Number(restaurantDraft.latitude) : undefined,
+        longitude: restaurantDraft.longitude.trim() ? Number(restaurantDraft.longitude) : undefined,
         description: restaurantDraft.description.trim() || undefined,
         deliveryFee: Number(restaurantDraft.deliveryFee),
         minimumOrderAmount: Number(restaurantDraft.minimumOrderAmount),
@@ -1120,7 +1275,60 @@ function AppContent() {
       {restaurantFormOpen ? (
         <>
           <TextInput value={restaurantDraft.name} onChangeText={(value) => setRestaurantDraft((current) => ({ ...current, name: value }))} placeholder="Restaurant name" placeholderTextColor="#9ca3af" style={styles.input} />
-          <TextInput value={restaurantDraft.address} onChangeText={(value) => setRestaurantDraft((current) => ({ ...current, address: value }))} placeholder="Restaurant address" placeholderTextColor="#9ca3af" style={styles.input} />
+          <TextInput value={restaurantDraft.address} onChangeText={(value) => setRestaurantDraft((current) => ({ ...current, address: value, latitude: "", longitude: "" }))} placeholder="Restaurant address" placeholderTextColor="#9ca3af" style={styles.input} />
+          {googleMapsApiKey ? (
+            <View style={styles.placeSearchPanel}>
+              <View style={styles.placeSearchHeader}>
+                <Text style={styles.placeSearchTitle}>Google location suggestions</Text>
+                {restaurantAddressSearching ? <Text style={styles.placeSearchMeta}>Searching...</Text> : null}
+              </View>
+              {restaurantAddressSuggestions.length ? (
+                restaurantAddressSuggestions.slice(0, 4).map((suggestion) => (
+                  <Pressable key={suggestion.placeId} style={styles.placeSuggestionCard} onPress={() => void selectRestaurantAddressSuggestion(suggestion)}>
+                    <Ionicons name="location-outline" size={18} color="#c2410c" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.placeSuggestionTitle}>{suggestion.primaryText}</Text>
+                      {suggestion.secondaryText ? <Text style={styles.placeSuggestionMeta}>{suggestion.secondaryText}</Text> : null}
+                    </View>
+                  </Pressable>
+                ))
+              ) : (
+                <Text style={styles.placeSearchMeta}>
+                  {restaurantDraft.address.trim().length < 3
+                    ? "Type at least 3 characters to search Ghana addresses."
+                    : "No suggestions yet. Keep typing or paste the full address."}
+                </Text>
+              )}
+            </View>
+          ) : null}
+          {restaurantDraft.latitude && restaurantDraft.longitude ? (
+            <View style={styles.placeCoordinatesCard}>
+              <Text style={styles.placeCoordinatesTitle}>Pinned coordinates</Text>
+              <Text style={styles.placeCoordinatesValue}>
+                {Number(restaurantDraft.latitude).toFixed(5)}, {Number(restaurantDraft.longitude).toFixed(5)}
+              </Text>
+            </View>
+          ) : null}
+          {restaurantDraft.latitude && restaurantDraft.longitude ? (
+            <View style={styles.restaurantPreviewMapWrap}>
+              <MapView
+                style={styles.restaurantPreviewMap}
+                initialRegion={buildMapRegion([
+                  { latitude: Number(restaurantDraft.latitude), longitude: Number(restaurantDraft.longitude) }
+                ])}
+                region={buildMapRegion([
+                  { latitude: Number(restaurantDraft.latitude), longitude: Number(restaurantDraft.longitude) }
+                ])}
+              >
+                <Marker
+                  coordinate={{ latitude: Number(restaurantDraft.latitude), longitude: Number(restaurantDraft.longitude) }}
+                  title={restaurantDraft.name || "Restaurant location"}
+                  description={restaurantDraft.address}
+                  pinColor="#f97316"
+                />
+              </MapView>
+            </View>
+          ) : null}
           <TextInput value={restaurantDraft.description} onChangeText={(value) => setRestaurantDraft((current) => ({ ...current, description: value }))} placeholder="Short description" placeholderTextColor="#9ca3af" style={styles.input} multiline />
           <TextInput value={restaurantDraft.storyHeadline} onChangeText={(value) => setRestaurantDraft((current) => ({ ...current, storyHeadline: value }))} placeholder="Story headline" placeholderTextColor="#9ca3af" style={styles.input} />
           <TextInput value={restaurantDraft.storyBody} onChangeText={(value) => setRestaurantDraft((current) => ({ ...current, storyBody: value }))} placeholder="Story body" placeholderTextColor="#9ca3af" style={styles.input} multiline />
@@ -2026,6 +2234,18 @@ const styles = StyleSheet.create({
   cardTitle: { fontSize: 16, fontWeight: "800", color: "#111827" },
   cardMeta: { marginTop: 4, fontSize: 12, lineHeight: 18, color: "#6b7280" },
   input: { marginTop: 12, borderRadius: 18, backgroundColor: "#f3f4f6", paddingHorizontal: 14, paddingVertical: 12, color: "#111827" },
+  placeSearchPanel: { marginTop: 12, borderRadius: 20, backgroundColor: "#fff7ed", borderWidth: 1, borderColor: "#fed7aa", padding: 14, gap: 10 },
+  placeSearchHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  placeSearchTitle: { color: "#111827", fontSize: 13, fontWeight: "800" },
+  placeSearchMeta: { color: "#6b7280", fontSize: 12, lineHeight: 18 },
+  placeSuggestionCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 18, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 12 },
+  placeSuggestionTitle: { color: "#111827", fontSize: 14, fontWeight: "800" },
+  placeSuggestionMeta: { marginTop: 3, color: "#6b7280", fontSize: 12, lineHeight: 17 },
+  placeCoordinatesCard: { marginTop: 12, borderRadius: 18, backgroundColor: "#eff6ff", borderWidth: 1, borderColor: "#bfdbfe", paddingHorizontal: 14, paddingVertical: 12 },
+  placeCoordinatesTitle: { color: "#1d4ed8", fontSize: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.6 },
+  placeCoordinatesValue: { marginTop: 6, color: "#111827", fontSize: 14, fontWeight: "700" },
+  restaurantPreviewMapWrap: { marginTop: 12, borderRadius: 20, overflow: "hidden", borderWidth: 1, borderColor: "#fde68a" },
+  restaurantPreviewMap: { width: "100%", height: 220 },
   error: { marginTop: 10, color: "#e11d48", fontSize: 13 },
   success: { marginTop: 10, color: "#15803d", fontSize: 13 },
   primaryButton: { marginTop: 18, borderRadius: 20, backgroundColor: "#f97316", paddingVertical: 16, alignItems: "center" },
@@ -2035,7 +2255,7 @@ const styles = StyleSheet.create({
   authLinks: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 18 },
   authLink: { color: "#9a3412", fontSize: 13, fontWeight: "700" },
   authLinkActive: { color: "#f97316" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 22, paddingBottom: 8 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   headerRight: { alignItems: "flex-end" },
   logoBadge: { width: 40, height: 40, borderRadius: 16 },
@@ -2044,7 +2264,7 @@ const styles = StyleSheet.create({
   notificationBadgeText: { color: "#ffffff", fontSize: 9, fontWeight: "800" },
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
   subtle: { marginTop: 4, fontSize: 12, color: "#6b7280" },
-  scroll: { paddingHorizontal: 20, paddingBottom: 20 },
+  scroll: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 20 },
   heroCard: { marginBottom: 14, borderRadius: 28, backgroundColor: "#111827", padding: 22 },
   heroLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: "#fdba74" },
   heroValue: { marginTop: 8, fontSize: 34, fontWeight: "800", color: "#fff" },

@@ -34,7 +34,7 @@
     },
     "android": {
       "package": "com.bitehub.vendor",
-      "versionCode": 6,
+      "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/bitehub-icon.png",
         "backgroundColor": "#040000"

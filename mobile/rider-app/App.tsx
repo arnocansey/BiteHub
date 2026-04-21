@@ -692,6 +692,50 @@ function AppContent() {
     await openExternal(webUrl, "Unable to open maps on this device.");
   }
 
+  async function openPickupMap(job: any) {
+    const restaurant = job?.order?.restaurant;
+    if (!restaurant) {
+      setError("Pickup location is not available yet.");
+      return;
+    }
+
+    const label = encodeURIComponent(restaurant.name ?? "Restaurant pickup");
+    const latitude = restaurant.latitude;
+    const longitude = restaurant.longitude;
+
+    if (typeof latitude === "number" && typeof longitude === "number") {
+      const url =
+        Platform.OS === "ios"
+          ? `http://maps.apple.com/?ll=${latitude},${longitude}&q=${label}`
+          : `geo:${latitude},${longitude}?q=${latitude},${longitude}(${label})`;
+      setError(null);
+      await openExternal(url, "Unable to open maps on this device.");
+      return;
+    }
+
+    const query = encodeURIComponent(restaurant.address ?? restaurant.name ?? "Restaurant pickup");
+    const webUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+    setError(null);
+    await openExternal(webUrl, "Unable to open maps on this device.");
+  }
+
+  async function openTripNavigation(job: any) {
+    const address = job?.order?.deliveryAddress;
+    if (!address) {
+      setError("Trip destination is not available yet.");
+      return;
+    }
+
+    const destination =
+      typeof address.latitude === "number" && typeof address.longitude === "number"
+        ? `${address.latitude},${address.longitude}`
+        : encodeURIComponent(address.fullAddress ?? address.label ?? "Customer dropoff");
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`;
+
+    setError(null);
+    await openExternal(url, "Unable to open turn-by-turn navigation on this device.");
+  }
+
   function openNotifications() {
     setProfileScreen("notifications");
   }
@@ -1065,17 +1109,18 @@ function AppContent() {
               {homeSection === "current" && activeMapJob ? (
                 <View style={styles.riderMapCard}>
                   <Text style={styles.cardTitle}>Live route map</Text>
-                  <Text style={styles.cardMeta}>Track your current position against the customer dropoff.</Text>
+                  <Text style={styles.cardMeta}>Track your current position against the pickup point and the customer dropoff.</Text>
                   <View style={styles.riderMapWrap}>
                     <MapView style={styles.riderMap} initialRegion={activeMapRegion} region={activeMapRegion}>
                       {locationCoords ? <Marker coordinate={{ latitude: locationCoords.latitude, longitude: locationCoords.longitude }} title="You" pinColor="#111827" /> : null}
+                      {typeof activeMapJob.order?.restaurant?.latitude === "number" && typeof activeMapJob.order?.restaurant?.longitude === "number" ? <Marker coordinate={{ latitude: activeMapJob.order.restaurant.latitude, longitude: activeMapJob.order.restaurant.longitude }} title={activeMapJob.order?.restaurant?.name ?? "Pickup"} pinColor="#2563eb" /> : null}
                       {typeof activeMapJob.order?.deliveryAddress?.latitude === "number" && typeof activeMapJob.order?.deliveryAddress?.longitude === "number" ? <Marker coordinate={{ latitude: activeMapJob.order.deliveryAddress.latitude, longitude: activeMapJob.order.deliveryAddress.longitude }} title={activeMapJob.order?.deliveryAddress?.label ?? "Dropoff"} pinColor="#f97316" /> : null}
                     </MapView>
                   </View>
                 </View>
               ) : null}
               <View style={styles.tripSectionBody}>
-                {homeTrips.length ? homeTrips.map((job) => <View key={job.id} style={styles.tripCard}><View style={styles.panelHeader}><View style={styles.tripCardHeaderCopy}><Text style={styles.cardTitle}>{job.order?.restaurant?.name ?? "Restaurant"}</Text><Text style={styles.tripCode}>{job.order?.id ?? job.id}</Text></View><Text style={styles.statusText}>{String(job.status).replaceAll("_", " ")}</Text></View><Text style={styles.routeTitle}>{job.order?.deliveryAddress?.label ?? "Dropoff location"}</Text><Text style={styles.cardMeta}>{job.order?.deliveryAddress?.fullAddress ?? "No delivery address available"}</Text>{job.order?.customer ? <Text style={styles.cardMeta}>Customer: {job.order.customer.firstName ?? "Customer"} {job.order.customer.lastName ?? ""}</Text> : null}<View style={styles.tripMetaRow}><View style={styles.tripMetaPill}><Ionicons name="navigate-outline" size={14} color="#c2410c" /><Text style={styles.tripMetaText}>{job.order?.deliveryAddress?.label ?? "Customer drop"}</Text></View><View style={styles.tripMetaPill}><Ionicons name="time-outline" size={14} color="#c2410c" /><Text style={styles.tripMetaText}>{job.updatedAt ? new Date(job.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Live"}</Text></View></View>{homeSection === "current" && job.riderProfileId ? <View style={styles.tripQuickActions}><Pressable style={styles.tripQuickButton} onPress={() => void openDropoffMap(job)}><Ionicons name="map-outline" size={15} color="#c2410c" /><Text style={styles.tripQuickButtonText}>Map</Text></Pressable><Pressable style={styles.tripQuickButton} onPress={() => void callCustomer(job)}><Ionicons name="call-outline" size={15} color="#c2410c" /><Text style={styles.tripQuickButtonText}>Call</Text></Pressable></View> : null}<View style={styles.deliveryActions}>{homeSection === "current" && !job.riderProfileId ? <Pressable style={styles.primaryAction} onPress={() => void acceptJob(job.id)}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Accept Job"}</Text></Pressable> : null}{homeSection === "current" && job.riderProfileId && job.status === "ASSIGNED" ? <Pressable style={styles.primaryAction} onPress={() => void updateDeliveryStatus(job.id, "PICKED_UP")}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Picked Up"}</Text></Pressable> : null}{homeSection === "current" && job.riderProfileId && job.status === "PICKED_UP" ? <Pressable style={styles.primaryAction} onPress={() => void updateDeliveryStatus(job.id, "IN_TRANSIT")}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Start Transit"}</Text></Pressable> : null}{homeSection === "current" && job.riderProfileId && job.status === "IN_TRANSIT" ? <Pressable style={styles.primaryAction} onPress={() => void updateDeliveryStatus(job.id, "DELIVERED")}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Deliver + Proof"}</Text></Pressable> : null}</View></View>) : <View style={styles.tripEmpty}><Text style={styles.cardTitle}>{homeSection === "current" ? "No current trips" : homeSection === "archive" ? "Archive is empty" : "No past trips yet"}</Text><Text style={styles.cardMeta}>{homeSection === "current" ? "Go online and accept a delivery to see it here." : homeSection === "archive" ? "Every delivery assigned to you will be kept here for quick review." : "Completed and closed deliveries will show here once you finish them."}</Text></View>}
+                {homeTrips.length ? homeTrips.map((job) => <View key={job.id} style={styles.tripCard}><View style={styles.panelHeader}><View style={styles.tripCardHeaderCopy}><Text style={styles.cardTitle}>{job.order?.restaurant?.name ?? "Restaurant"}</Text><Text style={styles.tripCode}>{job.order?.id ?? job.id}</Text></View><Text style={styles.statusText}>{String(job.status).replaceAll("_", " ")}</Text></View><Text style={styles.routeTitle}>{job.order?.deliveryAddress?.label ?? "Dropoff location"}</Text><Text style={styles.cardMeta}>{job.order?.deliveryAddress?.fullAddress ?? "No delivery address available"}</Text>{job.order?.restaurant?.address ? <Text style={styles.cardMeta}>Pickup: {job.order.restaurant.address}</Text> : null}{job.order?.customer ? <Text style={styles.cardMeta}>Customer: {job.order.customer.firstName ?? "Customer"} {job.order.customer.lastName ?? ""}</Text> : null}<View style={styles.tripMetaRow}><View style={styles.tripMetaPill}><Ionicons name="navigate-outline" size={14} color="#c2410c" /><Text style={styles.tripMetaText}>{job.order?.deliveryAddress?.label ?? "Customer drop"}</Text></View><View style={styles.tripMetaPill}><Ionicons name="time-outline" size={14} color="#c2410c" /><Text style={styles.tripMetaText}>{job.updatedAt ? new Date(job.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "Live"}</Text></View></View>{homeSection === "current" && job.riderProfileId ? <View style={styles.tripQuickActions}><Pressable style={styles.tripQuickButton} onPress={() => void openPickupMap(job)}><Ionicons name="storefront-outline" size={15} color="#c2410c" /><Text style={styles.tripQuickButtonText}>Pickup</Text></Pressable><Pressable style={styles.tripQuickButton} onPress={() => void openDropoffMap(job)}><Ionicons name="map-outline" size={15} color="#c2410c" /><Text style={styles.tripQuickButtonText}>Dropoff</Text></Pressable><Pressable style={styles.tripQuickButton} onPress={() => void openTripNavigation(job)}><Ionicons name="navigate-circle-outline" size={15} color="#c2410c" /><Text style={styles.tripQuickButtonText}>Navigate</Text></Pressable><Pressable style={styles.tripQuickButton} onPress={() => void callCustomer(job)}><Ionicons name="call-outline" size={15} color="#c2410c" /><Text style={styles.tripQuickButtonText}>Call</Text></Pressable></View> : null}<View style={styles.deliveryActions}>{homeSection === "current" && !job.riderProfileId ? <Pressable style={styles.primaryAction} onPress={() => void acceptJob(job.id)}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Accept Job"}</Text></Pressable> : null}{homeSection === "current" && job.riderProfileId && job.status === "ASSIGNED" ? <Pressable style={styles.primaryAction} onPress={() => void updateDeliveryStatus(job.id, "PICKED_UP")}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Picked Up"}</Text></Pressable> : null}{homeSection === "current" && job.riderProfileId && job.status === "PICKED_UP" ? <Pressable style={styles.primaryAction} onPress={() => void updateDeliveryStatus(job.id, "IN_TRANSIT")}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Start Transit"}</Text></Pressable> : null}{homeSection === "current" && job.riderProfileId && job.status === "IN_TRANSIT" ? <Pressable style={styles.primaryAction} onPress={() => void updateDeliveryStatus(job.id, "DELIVERED")}><Text style={styles.primaryActionText}>{busyDeliveryId === job.id ? "Working..." : "Deliver + Proof"}</Text></Pressable> : null}</View></View>) : <View style={styles.tripEmpty}><Text style={styles.cardTitle}>{homeSection === "current" ? "No current trips" : homeSection === "archive" ? "Archive is empty" : "No past trips yet"}</Text><Text style={styles.cardMeta}>{homeSection === "current" ? "Go online and accept a delivery to see it here." : homeSection === "archive" ? "Every delivery assigned to you will be kept here for quick review." : "Completed and closed deliveries will show here once you finish them."}</Text></View>}
               </View>
             </View>
             {homeSection === "current" ? <BikeCourierAnimation /> : null}
@@ -1379,7 +1424,7 @@ const styles = StyleSheet.create({
   authLinks: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 18 },
   authLink: { color: "#9a3412", fontSize: 13, fontWeight: "700" },
   authLinkActive: { color: "#f97316" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 22, paddingBottom: 12 },
   profileRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#fff7ed" },
   avatarPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#fff7ed", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#fdba74" },
@@ -1432,7 +1477,7 @@ const styles = StyleSheet.create({
   onlineChipText: { fontSize: 12, fontWeight: "800" },
   onlineChipTextActive: { color: "#15803d" },
   onlineChipTextMuted: { color: "#6b7280" },
-  scroll: { paddingHorizontal: 20, paddingBottom: 22 },
+  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 22 },
   profileScroll: { paddingTop: 12, flexGrow: 1 },
   tripFeatureShell: { marginBottom: 14, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.58)", borderWidth: 1, borderColor: "rgba(255,255,255,0.72)", padding: 16, shadowColor: "#111827", shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
   bikeHero: { marginTop: 12, borderRadius: 24, backgroundColor: "rgba(255,247,237,0.92)", padding: 18, overflow: "hidden" },

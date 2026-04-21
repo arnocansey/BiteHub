@@ -6,6 +6,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
 import { useEffect, useMemo, useState } from "react";
 import { Alert, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BiteHubSplash } from "./components/BiteHubSplash";
 
@@ -30,6 +31,12 @@ type CartLine = {
     groupName: string;
   }>;
 };
+type PlaceSuggestion = {
+  placeId: string;
+  primaryText: string;
+  secondaryText: string;
+  fullText: string;
+};
 type PrivateDataBundle = {
   orderData: any[];
   favoriteData: any[];
@@ -40,6 +47,7 @@ type PrivateDataBundle = {
 };
 const sessionStorageKey = "bitehub_customer_session";
 const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
+const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -93,8 +101,84 @@ function buildLocationLabel(places: Location.LocationGeocodedAddress[]) {
   return [place.district, place.city, place.region, place.country].filter(Boolean).slice(0, 3).join(", ");
 }
 
+function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: number | null }>) {
+  const valid = points.filter(
+    (point): point is { latitude: number; longitude: number } =>
+      typeof point.latitude === "number" && typeof point.longitude === "number"
+  );
+
+  if (!valid.length) {
+    return {
+      latitude: 5.6037,
+      longitude: -0.187,
+      latitudeDelta: 0.08,
+      longitudeDelta: 0.08
+    };
+  }
+
+  const latitudes = valid.map((point) => point.latitude);
+  const longitudes = valid.map((point) => point.longitude);
+  const minLat = Math.min(...latitudes);
+  const maxLat = Math.max(...latitudes);
+  const minLng = Math.min(...longitudes);
+  const maxLng = Math.max(...longitudes);
+
+  return {
+    latitude: (minLat + maxLat) / 2,
+    longitude: (minLng + maxLng) / 2,
+    latitudeDelta: Math.max(0.02, (maxLat - minLat) * 1.8 || 0.02),
+    longitudeDelta: Math.max(0.02, (maxLng - minLng) * 1.8 || 0.02)
+  };
+}
+
 function sanitizePhone(value: string) {
   return value.replace(/[^\d+\-\s()]/g, "");
+}
+
+async function fetchPlaceSuggestions(query: string) {
+  if (!googleMapsApiKey || query.trim().length < 3) return [];
+
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(
+      query.trim()
+    )}&components=country:gh&key=${googleMapsApiKey}`
+  );
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || payload?.status === "REQUEST_DENIED") {
+    throw new Error(payload?.error_message ?? "Unable to search Google Places right now.");
+  }
+
+  return (payload?.predictions ?? []).map((prediction: any) => ({
+    placeId: prediction.place_id,
+    primaryText: prediction.structured_formatting?.main_text ?? prediction.description ?? "Selected place",
+    secondaryText: prediction.structured_formatting?.secondary_text ?? "",
+    fullText: prediction.description ?? prediction.structured_formatting?.main_text ?? "Selected place"
+  })) as PlaceSuggestion[];
+}
+
+async function fetchPlaceDetails(placeId: string) {
+  if (!googleMapsApiKey) {
+    throw new Error("Google Maps API key is missing for this app.");
+  }
+
+  const response = await fetch(
+    `https://maps.googleapis.com/maps/api/place/details/json?place_id=${encodeURIComponent(
+      placeId
+    )}&fields=name,formatted_address,geometry&key=${googleMapsApiKey}`
+  );
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok || payload?.status === "REQUEST_DENIED" || !payload?.result?.geometry?.location) {
+    throw new Error(payload?.error_message ?? "Unable to load the selected place details.");
+  }
+
+  return {
+    name: payload.result.name ?? "Selected place",
+    fullAddress: payload.result.formatted_address ?? payload.result.name ?? "Selected place",
+    latitude: Number(payload.result.geometry.location.lat),
+    longitude: Number(payload.result.geometry.location.lng)
+  };
 }
 
 export default function App() {
@@ -156,6 +240,8 @@ function AppContent() {
   const [addressInput, setAddressInput] = useState("");
   const [addressInstructions, setAddressInstructions] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [addressSuggestions, setAddressSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [addressSearching, setAddressSearching] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [paymentAuthorizationUrl, setPaymentAuthorizationUrl] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
@@ -505,6 +591,67 @@ function AppContent() {
     return () => clearInterval(timer);
   }, [activeScreen, paymentMethod, paymentReference, session, trackedOrder]);
 
+  useEffect(() => {
+    if (activeScreen !== "cart" || selectedAddressId || !googleMapsApiKey) {
+      setAddressSuggestions([]);
+      setAddressSearching(false);
+      return;
+    }
+
+    const query = addressInput.trim();
+    if (query.length < 3) {
+      setAddressSuggestions([]);
+      setAddressSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAddressSearching(true);
+
+    const timer = setTimeout(() => {
+      void fetchPlaceSuggestions(query)
+        .then((suggestions) => {
+          if (!cancelled) {
+            setAddressSuggestions(suggestions);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setAddressSuggestions([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setAddressSearching(false);
+          }
+        });
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [activeScreen, addressInput, selectedAddressId]);
+
+  async function selectAddressSuggestion(suggestion: PlaceSuggestion) {
+    setCheckoutStatus(null);
+    setAddressSearching(true);
+    try {
+      const place = await fetchPlaceDetails(suggestion.placeId);
+      setSelectedAddressId("");
+      setAddressLabelInput((current) => current || suggestion.primaryText || "Delivery address");
+      setAddressInput(place.fullAddress);
+      setLocationCoords({ latitude: place.latitude, longitude: place.longitude });
+      setLocationLabel(place.name);
+      setLocationStatus("Pinned address from Google Places.");
+      setAddressSuggestions([]);
+    } catch (err) {
+      setCheckoutStatus(err instanceof Error ? err.message : "Unable to use the selected address.");
+    } finally {
+      setAddressSearching(false);
+    }
+  }
+
   async function openRestaurant(restaurant: any, switchScreen = true) {
     setSelectedRestaurant(restaurant);
     if (switchScreen) setActiveScreen("menu");
@@ -851,7 +998,7 @@ function AppContent() {
 
       if (!deliveryAddressId) {
         if (!addressInput.trim() || !locationCoords) {
-          throw new Error("Add a delivery address and enable location before placing the order.");
+          throw new Error("Add a delivery address and choose a suggested place or enable location before placing the order.");
         }
 
         const createdAddress = await request<any>(
@@ -989,6 +1136,16 @@ function AppContent() {
   const featuredRestaurants = useMemo(() => restaurants.filter((restaurant) => restaurant.isFeatured).slice(0, 5), [restaurants]);
   const promoRestaurant = featuredRestaurants[0] ?? restaurants[0] ?? null;
   const displayedLocation = locationLabel ?? profile?.customerProfile?.defaultAddress ?? "Accra, Ghana";
+  const activeTrackingRegion = buildMapRegion([
+    {
+      latitude: trackingDelivery?.riderProfile?.currentLatitude,
+      longitude: trackingDelivery?.riderProfile?.currentLongitude
+    },
+    {
+      latitude: trackedOrder?.deliveryAddress?.latitude ?? trackingDelivery?.order?.deliveryAddress?.latitude,
+      longitude: trackedOrder?.deliveryAddress?.longitude ?? trackingDelivery?.order?.deliveryAddress?.longitude
+    }
+  ]);
   const unreadNotificationCount = notifications.filter((item) => !item.isRead).length;
   const filteredRestaurants = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -1298,6 +1455,33 @@ function AppContent() {
               {addresses.length ? <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.restaurantChoiceRow}>{addresses.map((address) => <Pressable key={address.id} style={[styles.restaurantChoice, selectedAddressId === address.id && styles.restaurantChoiceActive]} onPress={() => { setSelectedAddressId(address.id); setAddressInput(address.fullAddress ?? ""); setAddressInstructions(address.instructions ?? ""); }}><Text style={[styles.restaurantChoiceText, selectedAddressId === address.id && styles.restaurantChoiceTextActive]}>{address.label}</Text></Pressable>)}</ScrollView> : <Text style={styles.cardMeta}>No saved addresses yet. Add one below.</Text>}
               <TextInput value={addressLabelInput} onChangeText={setAddressLabelInput} placeholder="Address label" placeholderTextColor="#9ca3af" style={styles.input} />
               <TextInput value={addressInput} onChangeText={(value) => { setSelectedAddressId(""); setAddressInput(value); }} placeholder="Full delivery address" placeholderTextColor="#9ca3af" style={styles.input} multiline />
+              {!selectedAddressId && googleMapsApiKey ? (
+                <View style={styles.addressSearchPanel}>
+                  <View style={styles.addressSearchHeader}>
+                    <Text style={styles.addressSearchTitle}>Google address suggestions</Text>
+                    {addressSearching ? <Text style={styles.addressSearchMeta}>Searching...</Text> : null}
+                  </View>
+                  {addressSuggestions.length ? (
+                    addressSuggestions.slice(0, 4).map((suggestion) => (
+                      <Pressable key={suggestion.placeId} style={styles.addressSuggestionCard} onPress={() => void selectAddressSuggestion(suggestion)}>
+                        <Ionicons name="location-outline" size={18} color="#c2410c" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.addressSuggestionTitle}>{suggestion.primaryText}</Text>
+                          {suggestion.secondaryText ? <Text style={styles.addressSuggestionMeta}>{suggestion.secondaryText}</Text> : null}
+                        </View>
+                      </Pressable>
+                    ))
+                  ) : (
+                    <Text style={styles.addressSearchMeta}>
+                      {addressInput.trim().length < 3 ? "Type at least 3 characters to search Ghana addresses." : "No address suggestions yet."}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+              <Pressable style={styles.secondaryButton} onPress={() => void refreshLocation()}>
+                <Text style={styles.secondaryButtonText}>{locating ? "Checking live location..." : "Use my live location"}</Text>
+              </Pressable>
+              {locationCoords ? <Text style={styles.cardMeta}>Pinned coordinates: {locationCoords.latitude.toFixed(5)}, {locationCoords.longitude.toFixed(5)}</Text> : null}
               <TextInput value={addressInstructions} onChangeText={setAddressInstructions} placeholder="Delivery instructions" placeholderTextColor="#9ca3af" style={styles.input} multiline />
             </View>
             <View style={styles.summary}>
@@ -1462,35 +1646,42 @@ function AppContent() {
       {activeTab === "orders" ? <View style={styles.shell}>{!session ? authGateScreen : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.ordersScroll}><Text style={styles.ordersPageTitle}>Orders</Text>{recentOrders.map((order, index) => <Pressable key={order.id} style={[styles.orderShowcaseCard, index % 2 === 0 ? styles.orderShowcaseGreen : styles.orderShowcaseBlue]} onPress={() => { setTrackedOrder(order); setActiveTab("home"); setActiveScreen("tracking"); void loadTracking(order.id); }}><View style={styles.orderShowcaseHeader}><View style={styles.orderBadge}><Text style={styles.orderBadgeText}>{order.restaurant?.name?.slice(0, 1) ?? "B"}</Text></View><View style={{ flex: 1 }}><Text style={styles.orderShowcaseTitle}>{order.restaurant?.name ?? "BiteHub Kitchen"}</Text><Text style={styles.cardMeta}>{String(order.status).replaceAll("_", " ")}</Text></View><View style={styles.orderPriceChip}><Text style={styles.orderPriceChipText}>{formatMoney(Number(order.totalAmount ?? 0))}</Text></View></View><View style={styles.orderFoodHero}><Ionicons name={index % 2 === 0 ? "fast-food" : "pizza"} size={92} color="#8d2d00" /></View><View style={styles.orderCourierRow}><View style={styles.orderCourierAvatar}><Text style={styles.orderCourierInitial}>{order.rider?.user?.firstName?.slice(0, 1) ?? "A"}</Text></View><View style={{ flex: 1 }}><Text style={styles.detailOwnerName}>{order.rider?.user?.firstName ?? "Assigned"} {order.rider?.user?.lastName ?? "Rider"}</Text><Text style={styles.cardMeta}>{order.deliveryAddress?.label ?? "Pickup and delivery in progress"}</Text></View><View style={styles.orderActions}><Ionicons name="location-outline" size={18} color="#111827" /><Ionicons name="call-outline" size={18} color="#111827" /></View></View></Pressable>)}{!recentOrders.length ? <View style={styles.summary}><Text style={styles.cardTitle}>No orders yet</Text><Text style={styles.cardMeta}>Once you place an order, it will appear here in the cleaner card stack.</Text></View> : null}</ScrollView>}{nav}</View> : null}
       {activeTab === "saved" ? <View style={styles.shell}>{!session ? authGateScreen : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><Text style={styles.headerTitle}>Saved Restaurants</Text>{favorites.map((favorite) => <View key={favorite.id} style={styles.card}><View style={styles.thumb}><Text style={styles.thumbText}>{favorite.restaurant?.name?.slice(0, 1) ?? "S"}</Text></View><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{favorite.restaurant?.name ?? "Restaurant"}</Text><Text style={styles.cardMeta}>{favorite.restaurant?.address ?? ""}</Text></View></View>)}</ScrollView>}{nav}</View> : null}
       {activeTab === "profile" ? <View style={styles.shell}>{!session ? authGateScreen : <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><Text style={styles.headerTitle}>My Profile</Text><View style={styles.profileCard}><View style={styles.avatar}><Text style={styles.avatarText}>{profile?.firstName?.[0] ?? session.user.firstName[0]}{profile?.lastName?.[0] ?? session.user.lastName[0]}</Text></View><View style={{ flex: 1 }}><Text style={styles.cardTitle}>{profile?.firstName ?? session.user.firstName} {profile?.lastName ?? session.user.lastName}</Text><Text style={styles.cardMeta}>{profile?.email ?? session.user.email}</Text><Text style={styles.cardMeta}>{profile?.customerProfile?.defaultAddress ?? "No default address set"}</Text></View></View><View style={styles.summary}><Text style={styles.cardTitle}>Notifications</Text><Text style={styles.cardMeta}>{unreadNotificationCount} unread notification(s)</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void markAllNotificationsRead()}><Text style={styles.secondaryButtonText}>Mark all read</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void clearReadNotifications()}><Text style={styles.secondaryButtonText}>Clear read</Text></Pressable></View>{notifications.length ? notifications.slice(0, 5).map((notification) => <Pressable key={notification.id} style={styles.collectionReason} onPress={() => void markNotificationRead(notification.id)}><Text style={styles.cardTitleSmall}>{notification.title}</Text><Text style={styles.cardMeta}>{notification.body}</Text><Text style={styles.cardMeta}>{notification.isRead ? "Read" : "Tap to mark as read"}</Text></Pressable>) : <Text style={styles.cardMeta}>No notifications yet.</Text>}</View><View style={styles.summary}><Text style={styles.cardTitle}>Loyalty</Text><Text style={styles.cardMeta}>Tier: {retentionOverview?.loyaltyWallet?.tier ?? profile?.customerProfile?.loyaltyWallet?.tier ?? "CORE"}</Text><Text style={styles.price}>{retentionOverview?.loyaltyWallet?.pointsBalance ?? profile?.customerProfile?.loyaltyWallet?.pointsBalance ?? 0} points</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void createMealPlan()}><Text style={styles.secondaryButtonText}>Create meal plan</Text></Pressable></View>{supportStatus ? <Text style={styles.cardMeta}>{supportStatus}</Text> : null}</View>{retentionOverview?.subscriptions?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Subscriptions</Text>{retentionOverview.subscriptions.map((subscription: any) => <View key={subscription.id} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{subscription.name}</Text><Text style={styles.cardMeta}>{subscription.benefitsSummary}</Text></View>)}</View> : null}{retentionOverview?.mealPlans?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Meal plans</Text>{retentionOverview.mealPlans.map((plan: any) => <View key={plan.id} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{plan.title}</Text><Text style={styles.cardMeta}>{plan.goal ?? "Personal plan"} | {plan.mealsPerWeek} meals/week</Text></View>)}</View> : null}{retentionOverview?.scheduledOrders?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Scheduled orders</Text>{retentionOverview.scheduledOrders.map((scheduled: any) => <View key={scheduled.id} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{scheduled.title}</Text><Text style={styles.cardMeta}>{scheduled.restaurant?.name ?? "Restaurant"} | {scheduled.cadenceLabel}</Text></View>)}</View> : null}{retentionOverview?.reorderSuggestions?.length ? <View style={styles.summary}><Text style={styles.cardTitle}>Reorder suggestions</Text>{retentionOverview.reorderSuggestions.map((suggestion: any) => <View key={suggestion.orderId} style={styles.collectionReason}><Text style={styles.cardTitleSmall}>{suggestion.restaurantName}</Text><Text style={styles.cardMeta}>{(suggestion.topItems ?? []).join(", ")}</Text></View>)}</View> : null}<View style={styles.summary}><Text style={styles.cardTitle}>Account</Text><Text style={styles.cardMeta}>Sign out of your BiteHub customer session on this device.</Text><Pressable style={styles.primaryButton} onPress={signOut}><Text style={styles.primaryButtonText}>Sign Out</Text></Pressable></View></ScrollView>}{nav}</View> : null}
-        {activeTab === "home" && activeScreen === "tracking" ? <View style={styles.shell}><View style={styles.headerRow}><Pressable style={styles.iconButton} onPress={() => setActiveScreen("browse")}><Text style={styles.iconButtonText}>Back</Text></Pressable><Text style={styles.headerTitle}>Track Order</Text></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><View style={styles.summary}><Text style={styles.cardTitle}>{trackedOrder?.restaurant?.name ?? selectedRestaurant?.name ?? "BiteHub order"}</Text><Text style={styles.cardMeta}>{trackedOrder?.id ?? "Live tracking"}</Text><Text style={styles.price}>ETA {eta?.etaMinutes ?? "--"} min | {eta?.confidencePercent ?? "--"}% confidence</Text>{eta?.delayReason ? <Text style={styles.cardMeta}>{eta.delayReason}</Text> : null}</View>{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Live rider location</Text><View style={styles.locationSignalCard}><View style={styles.locationSignalHeader}><View style={styles.locationSignalBadge}><Ionicons name="navigate" size={16} color="#c2410c" /></View><View style={{ flex: 1 }}><Text style={styles.locationSignalTitle}>Rider route is active</Text><Text style={styles.locationSignalCopy}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known coordinates: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "We will show the rider's last known location as soon as they start moving."}</Text></View></View><View style={styles.locationSignalFooter}><Text style={styles.locationSignalMeta}>{trackedOrder?.deliveryAddress?.label ?? trackingDelivery?.order?.deliveryAddress?.label ?? "Delivery destination"}</Text><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open live location</Text></Pressable></View></View></View> : null}{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Your rider</Text><Text style={styles.cardMeta}>{trackingDelivery.riderProfile.user?.firstName ?? "Rider"} {trackingDelivery.riderProfile.user?.lastName ?? ""}{trackingDelivery.riderProfile.vehicleType ? ` | ${trackingDelivery.riderProfile.vehicleType}` : ""}</Text><Text style={styles.cardMeta}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known location: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "Live rider location will appear once the rider is active."}</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void callRider()}><Text style={styles.secondaryButtonText}>Call rider</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open rider location</Text></Pressable></View></View> : null}<View style={styles.summary}><Text style={styles.cardTitle}>Timeline</Text>{timeline.length ? timeline.map((event) => <View key={event.id} style={styles.timelineRow}><View style={styles.timelineDot} /><View style={{ flex: 1 }}><Text style={styles.cardTitleSmall}>{event.title}</Text>{event.description ? <Text style={styles.cardMeta}>{event.description}</Text> : null}</View></View>) : <Text style={styles.cardMeta}>Tracking data will appear here when the order moves.</Text>}</View>{session && trackedOrder ? <View style={styles.summary}><Text style={styles.cardTitle}>Need help?</Text><TextInput value={supportMessage} onChangeText={setSupportMessage} placeholder="Describe the issue with this order" placeholderTextColor="#9ca3af" style={styles.input} />{supportStatus ? <Text style={styles.cardMeta}>{supportStatus}</Text> : null}<Pressable style={styles.primaryButton} onPress={() => void createSupportTicket()}><Text style={styles.primaryButtonText}>Contact Support</Text></Pressable></View> : null}</ScrollView></View> : null}
+        {activeTab === "home" && activeScreen === "tracking" ? <View style={styles.shell}><View style={styles.headerRow}><Pressable style={styles.iconButton} onPress={() => setActiveScreen("browse")}><Text style={styles.iconButtonText}>Back</Text></Pressable><Text style={styles.headerTitle}>Track Order</Text></View><ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}><View style={styles.summary}><Text style={styles.cardTitle}>{trackedOrder?.restaurant?.name ?? selectedRestaurant?.name ?? "BiteHub order"}</Text><Text style={styles.cardMeta}>{trackedOrder?.id ?? "Live tracking"}</Text><Text style={styles.price}>ETA {eta?.etaMinutes ?? "--"} min | {eta?.confidencePercent ?? "--"}% confidence</Text>{eta?.delayReason ? <Text style={styles.cardMeta}>{eta.delayReason}</Text> : null}</View>{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Live tracking map</Text><Text style={styles.cardMeta}>Follow the rider’s current position and your delivery destination on the same map.</Text><View style={styles.customerMapWrap}><MapView style={styles.customerMap} initialRegion={activeTrackingRegion} region={activeTrackingRegion}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? <Marker coordinate={{ latitude: trackingDelivery.riderProfile.currentLatitude, longitude: trackingDelivery.riderProfile.currentLongitude }} title="Rider" pinColor="#111827" /> : null}{typeof (trackedOrder?.deliveryAddress?.latitude ?? trackingDelivery?.order?.deliveryAddress?.latitude) === "number" && typeof (trackedOrder?.deliveryAddress?.longitude ?? trackingDelivery?.order?.deliveryAddress?.longitude) === "number" ? <Marker coordinate={{ latitude: trackedOrder?.deliveryAddress?.latitude ?? trackingDelivery?.order?.deliveryAddress?.latitude, longitude: trackedOrder?.deliveryAddress?.longitude ?? trackingDelivery?.order?.deliveryAddress?.longitude }} title={trackedOrder?.deliveryAddress?.label ?? trackingDelivery?.order?.deliveryAddress?.label ?? "Destination"} pinColor="#f97316" /> : null}</MapView></View></View> : null}{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Live rider location</Text><View style={styles.locationSignalCard}><View style={styles.locationSignalHeader}><View style={styles.locationSignalBadge}><Ionicons name="navigate" size={16} color="#c2410c" /></View><View style={{ flex: 1 }}><Text style={styles.locationSignalTitle}>Rider route is active</Text><Text style={styles.locationSignalCopy}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known coordinates: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "We will show the rider's last known location as soon as they start moving."}</Text></View></View><View style={styles.locationSignalFooter}><Text style={styles.locationSignalMeta}>{trackedOrder?.deliveryAddress?.label ?? trackingDelivery?.order?.deliveryAddress?.label ?? "Delivery destination"}</Text><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open live location</Text></Pressable></View></View></View> : null}{trackingDelivery?.riderProfile ? <View style={styles.summary}><Text style={styles.cardTitle}>Your rider</Text><Text style={styles.cardMeta}>{trackingDelivery.riderProfile.user?.firstName ?? "Rider"} {trackingDelivery.riderProfile.user?.lastName ?? ""}{trackingDelivery.riderProfile.vehicleType ? ` | ${trackingDelivery.riderProfile.vehicleType}` : ""}</Text><Text style={styles.cardMeta}>{typeof trackingDelivery.riderProfile.currentLatitude === "number" && typeof trackingDelivery.riderProfile.currentLongitude === "number" ? `Last known location: ${trackingDelivery.riderProfile.currentLatitude.toFixed(5)}, ${trackingDelivery.riderProfile.currentLongitude.toFixed(5)}` : "Live rider location will appear once the rider is active."}</Text><View style={styles.actionRow}><Pressable style={styles.secondaryButton} onPress={() => void callRider()}><Text style={styles.secondaryButtonText}>Call rider</Text></Pressable><Pressable style={styles.secondaryButton} onPress={() => void openRiderLocation()}><Text style={styles.secondaryButtonText}>Open rider location</Text></Pressable></View></View> : null}<View style={styles.summary}><Text style={styles.cardTitle}>Timeline</Text>{timeline.length ? timeline.map((event) => <View key={event.id} style={styles.timelineRow}><View style={styles.timelineDot} /><View style={{ flex: 1 }}><Text style={styles.cardTitleSmall}>{event.title}</Text>{event.description ? <Text style={styles.cardMeta}>{event.description}</Text> : null}</View></View>) : <Text style={styles.cardMeta}>Tracking data will appear here when the order moves.</Text>}</View>{session && trackedOrder ? <View style={styles.summary}><Text style={styles.cardTitle}>Need help?</Text><TextInput value={supportMessage} onChangeText={setSupportMessage} placeholder="Describe the issue with this order" placeholderTextColor="#9ca3af" style={styles.input} />{supportStatus ? <Text style={styles.cardMeta}>{supportStatus}</Text> : null}<Pressable style={styles.primaryButton} onPress={() => void createSupportTicket()}><Text style={styles.primaryButtonText}>Contact Support</Text></Pressable></View> : null}</ScrollView></View> : null}
     </SafeAreaView>
   );
 }
 
 const pill = { borderRadius: 999, overflow: "hidden" } as const;
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f9fafb" }, shell: { flex: 1, backgroundColor: "#f9fafb" }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 18 },
+  safeArea: { flex: 1, backgroundColor: "#f9fafb" }, shell: { flex: 1, backgroundColor: "#f9fafb" }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 22 },
   headerTitle: { fontSize: 24, fontWeight: "800", color: "#111827" }, headerBrandWrap: { flexDirection: "row", alignItems: "center", gap: 10 }, headerChip: { ...pill, backgroundColor: "#fff7ed", paddingHorizontal: 12, paddingVertical: 8 }, headerChipText: { color: "#c2410c", fontWeight: "800" }, caption: { fontSize: 12, color: "#9ca3af", marginTop: 4 },
   brandLogoLarge: { width: 152, height: 152, alignSelf: "center" }, brandLogoSmall: { width: 42, height: 42 },
   search: { marginHorizontal: 20, marginTop: 16, borderRadius: 20, backgroundColor: "#f3f4f6", paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 10 }, searchInput: { flex: 1, fontSize: 14, color: "#374151" }, filterChip: { borderRadius: 14, backgroundColor: "#f97316", paddingHorizontal: 12, paddingVertical: 8 }, filterChipText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   locationCard: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff7ed", padding: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 }, locationIconWrap: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center" }, locationEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: "#c2410c" }, locationTitle: { marginTop: 6, fontSize: 16, fontWeight: "800", color: "#111827" }, locationMeta: { marginTop: 4, fontSize: 12, lineHeight: 18, color: "#6b7280" }, locationHint: { marginTop: 6, fontSize: 12, lineHeight: 18, color: "#9a3412" }, locationButton: { borderRadius: 16, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 10 }, locationButtonText: { color: "#c2410c", fontSize: 12, fontWeight: "800" },
-  scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 26 }, heroCard: { borderRadius: 30, backgroundColor: "#111827", padding: 22, marginBottom: 18 }, heroLabel: { fontSize: 11, fontWeight: "800", color: "#fdba74", textTransform: "uppercase", letterSpacing: 0.8 }, heroTitle: { marginTop: 10, fontSize: 28, lineHeight: 34, color: "#fff", fontWeight: "800" }, heroCopy: { marginTop: 12, fontSize: 14, lineHeight: 22, color: "#d1d5db" },
+  scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 26 }, heroCard: { borderRadius: 30, backgroundColor: "#111827", padding: 22, marginBottom: 18 }, heroLabel: { fontSize: 11, fontWeight: "800", color: "#fdba74", textTransform: "uppercase", letterSpacing: 0.8 }, heroTitle: { marginTop: 10, fontSize: 28, lineHeight: 34, color: "#fff", fontWeight: "800" }, heroCopy: { marginTop: 12, fontSize: 14, lineHeight: 22, color: "#d1d5db" },
   sectionTitle: { marginTop: 8, marginBottom: 12, fontSize: 18, fontWeight: "800", color: "#111827" }, horizontalList: { gap: 12, paddingBottom: 4 }, featureCard: { width: 260, borderRadius: 28, backgroundColor: "#fb923c", padding: 18, marginBottom: 18 }, featureEyebrow: { color: "#ffedd5", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 }, featureTitle: { color: "#fff", fontSize: 22, lineHeight: 28, fontWeight: "800", marginTop: 10 }, featureCopy: { color: "#fff7ed", fontSize: 13, lineHeight: 20, marginTop: 10 }, featureMeta: { color: "#7c2d12", fontSize: 12, fontWeight: "800", marginTop: 14 },
   collectionCard: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff7ed", padding: 16 }, collectionTitle: { fontSize: 16, fontWeight: "800", color: "#9a3412" }, collectionPill: { minWidth: 180, borderRadius: 22, backgroundColor: "#fff", padding: 14 }, collectionPillTitle: { fontSize: 14, fontWeight: "800", color: "#111827" }, collectionPillMeta: { marginTop: 6, fontSize: 12, lineHeight: 18, color: "#6b7280" },
   card: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff", padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }, cardTitle: { fontSize: 15, fontWeight: "800", color: "#111827" }, cardMeta: { marginTop: 4, fontSize: 12, lineHeight: 18, color: "#6b7280" }, thumb: { width: 64, height: 64, borderRadius: 22, backgroundColor: "#fff7ed", alignItems: "center", justifyContent: "center" }, thumbText: { fontSize: 24, color: "#c2410c", fontWeight: "800" }, heart: { fontSize: 12, fontWeight: "800", color: "#f97316" },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingTop: 18 }, iconButton: { minWidth: 56, height: 40, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, iconButtonText: { fontSize: 13, color: "#374151", fontWeight: "700" }, storyCard: { marginBottom: 14, borderRadius: 30, backgroundColor: "#1f2937", padding: 20 }, storyEyebrow: { color: "#fdba74", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 }, storyTitle: { color: "#fff", fontSize: 26, lineHeight: 32, fontWeight: "800", marginTop: 10 }, storyCopy: { color: "#e5e7eb", fontSize: 14, lineHeight: 22, marginTop: 12 }, storyNote: { color: "#fed7aa", fontSize: 13, lineHeight: 20, marginTop: 12, fontWeight: "700" }, storyMeta: { color: "#d1d5db", fontSize: 12, lineHeight: 18, marginTop: 10 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingTop: 22 }, iconButton: { minWidth: 56, height: 40, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, iconButtonText: { fontSize: 13, color: "#374151", fontWeight: "700" }, storyCard: { marginBottom: 14, borderRadius: 30, backgroundColor: "#1f2937", padding: 20 }, storyEyebrow: { color: "#fdba74", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 }, storyTitle: { color: "#fff", fontSize: 26, lineHeight: 32, fontWeight: "800", marginTop: 10 }, storyCopy: { color: "#e5e7eb", fontSize: 14, lineHeight: 22, marginTop: 12 }, storyNote: { color: "#fed7aa", fontSize: 13, lineHeight: 20, marginTop: 12, fontWeight: "700" }, storyMeta: { color: "#d1d5db", fontSize: 12, lineHeight: 18, marginTop: 10 },
   price: { marginTop: 8, fontSize: 14, fontWeight: "800", color: "#f97316" }, inlineMeta: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }, inlineBadge: { ...pill, backgroundColor: "#fed7aa", color: "#9a3412", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "800" }, inlineBadgeMuted: { ...pill, backgroundColor: "#ffedd5", color: "#c2410c", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "700" }, inlineTag: { ...pill, backgroundColor: "#f3f4f6", color: "#4b5563", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "700" },
   actionRow: { flexDirection: "row", gap: 10, marginTop: 14, flexWrap: "wrap" }, secondaryButton: { borderRadius: 18, backgroundColor: "#fff7ed", paddingHorizontal: 14, paddingVertical: 12 }, secondaryButtonText: { color: "#c2410c", fontSize: 12, fontWeight: "800" },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 8 }, qty: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#f97316", alignItems: "center", justifyContent: "center" }, qtyText: { color: "#fff", fontSize: 18, fontWeight: "800" }, qtyAlt: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#ffedd5", alignItems: "center", justifyContent: "center" }, qtyAltText: { color: "#c2410c", fontSize: 18, fontWeight: "800" }, qtyCount: { minWidth: 18, textAlign: "center", fontSize: 14, fontWeight: "800", color: "#111827" },
   footer: { paddingHorizontal: 20, paddingBottom: 12 }, checkout: { borderRadius: 22, backgroundColor: "#f97316", paddingHorizontal: 18, paddingVertical: 16, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }, checkoutBadge: { ...pill, alignSelf: "flex-start", backgroundColor: "#fb923c", color: "#fff", paddingHorizontal: 10, paddingVertical: 5, fontWeight: "800" }, checkoutText: { color: "#fff", fontSize: 16, fontWeight: "900", marginTop: 8 }, checkoutSubtext: { color: "#ffedd5", fontSize: 12, lineHeight: 18, marginTop: 4, maxWidth: 220 }, checkoutAmount: { color: "#ffffff", fontSize: 16, fontWeight: "900" }, summary: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff", padding: 16 },
   checkoutHelperText: { marginTop: 12, color: "#6b7280", fontSize: 12, lineHeight: 18 },
+  addressSearchPanel: { marginTop: 12, borderRadius: 22, backgroundColor: "#fff7ed", padding: 14, borderWidth: 1, borderColor: "#fed7aa", gap: 10 },
+  addressSearchHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  addressSearchTitle: { color: "#111827", fontSize: 13, fontWeight: "800" },
+  addressSearchMeta: { color: "#6b7280", fontSize: 12, lineHeight: 18 },
+  addressSuggestionCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, borderRadius: 18, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 12 },
+  addressSuggestionTitle: { color: "#111827", fontSize: 14, fontWeight: "800" },
+  addressSuggestionMeta: { marginTop: 3, color: "#6b7280", fontSize: 12, lineHeight: 17 },
   authInline: { paddingHorizontal: 20, paddingTop: 24 }, input: { marginTop: 12, borderRadius: 18, backgroundColor: "#f3f4f6", paddingHorizontal: 14, paddingVertical: 12, color: "#111827" }, error: { color: "#e11d48", marginBottom: 10, fontSize: 13 }, success: { color: "#15803d", marginBottom: 10, marginTop: 10, fontSize: 13 }, primaryButton: { marginTop: 18, borderRadius: 20, backgroundColor: "#f97316", paddingVertical: 16, alignItems: "center" }, primaryButtonText: { color: "#fff", fontSize: 16, fontWeight: "800" },
   secondaryGhostButton: { marginTop: 12, borderRadius: 20, borderWidth: 1, borderColor: "#fdba74", paddingVertical: 14, alignItems: "center" }, secondaryGhostText: { color: "#c2410c", fontSize: 14, fontWeight: "800" }, authLinks: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 18 }, authLink: { color: "#9a3412", fontSize: 13, fontWeight: "700" }, authLinkActive: { color: "#f97316" },
   authGateScrollContent: { flexGrow: 1 }, authGateShell: { flexGrow: 1, justifyContent: "flex-start", paddingHorizontal: 20, paddingTop: 28, paddingBottom: 32, backgroundColor: "#f9fafb" }, authGateHero: { marginBottom: 22 }, authGateTitle: { marginTop: 12, fontSize: 32, lineHeight: 38, fontWeight: "800", color: "#111827" }, authGateCopy: { marginTop: 10, fontSize: 15, lineHeight: 22, color: "#6b7280" }, authGateCard: { borderRadius: 30, backgroundColor: "#ffffff", paddingVertical: 8, shadowColor: "#111827", shadowOpacity: 0.08, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 4 },
   profileCard: { marginTop: 18, borderRadius: 28, backgroundColor: "#fff", padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }, avatar: { width: 68, height: 68, borderRadius: 34, backgroundColor: "#ffedd5", alignItems: "center", justifyContent: "center" }, avatarText: { color: "#c2410c", fontSize: 20, fontWeight: "800" }, timelineRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginTop: 14 }, timelineDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#f97316", marginTop: 4 }, cardTitleSmall: { fontSize: 14, fontWeight: "800", color: "#111827" }, tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }, tagPill: { ...pill, backgroundColor: "#fff7ed", paddingHorizontal: 12, paddingVertical: 7 }, tagText: { color: "#c2410c", fontSize: 12, fontWeight: "800" }, collectionReason: { marginTop: 12, borderTopWidth: 1, borderTopColor: "#f3f4f6", paddingTop: 12 },
   bottomNavWrap: { paddingHorizontal: 20, paddingBottom: 16, backgroundColor: "#f9fafb" },
   bottomNav: { borderRadius: 26, backgroundColor: "#111827", paddingVertical: 12, paddingHorizontal: 6, flexDirection: "row", justifyContent: "space-around" }, navItem: { minWidth: 58, alignItems: "center", gap: 4, borderRadius: 18, paddingVertical: 8 }, navLabel: { fontSize: 12, fontWeight: "700", color: "#9ca3af" }, navLabelActive: { color: "#ffffff" }, badge: { position: "absolute", right: -2, top: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#f97316", alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }, badgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
-  shopScroll: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18 },
+  shopScroll: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 18 },
   shopHeader: { marginBottom: 16 },
   shopHeaderTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   shopLocationPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 18, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 9 },
@@ -1532,7 +1723,7 @@ const styles = StyleSheet.create({
   detailHero: { height: 310, borderBottomLeftRadius: 34, borderBottomRightRadius: 34, backgroundColor: "#d9f99d", paddingHorizontal: 18, paddingTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   detailTopButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.75)", alignItems: "center", justifyContent: "center" },
   detailHeroPlate: { position: "absolute", left: 0, right: 0, top: 74, alignItems: "center", justifyContent: "center" },
-  detailContent: { marginTop: -22, borderTopLeftRadius: 32, borderTopRightRadius: 32, backgroundColor: "#f9fafb", paddingHorizontal: 20, paddingTop: 24 },
+  detailContent: { marginTop: -12, borderTopLeftRadius: 32, borderTopRightRadius: 32, backgroundColor: "#f9fafb", paddingHorizontal: 20, paddingTop: 24 },
   detailTitle: { fontSize: 28, fontWeight: "900", color: "#111827" },
   detailSubhead: { marginTop: 6, color: "#6b7280", fontSize: 13, lineHeight: 19 },
   detailPriceRow: { marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -1572,7 +1763,9 @@ const styles = StyleSheet.create({
   locationSignalCopy: { marginTop: 4, color: "#6b7280", fontSize: 12, lineHeight: 18 },
   locationSignalFooter: { gap: 10 },
   locationSignalMeta: { color: "#9a3412", fontSize: 12, fontWeight: "700" },
-  ordersScroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 },
+  customerMapWrap: { marginTop: 12, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: "#fed7aa" },
+  customerMap: { width: "100%", height: 240 },
+  ordersScroll: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 18 },
   ordersPageTitle: { marginBottom: 16, fontSize: 28, fontWeight: "900", color: "#111827", alignSelf: "center" },
   orderShowcaseCard: { marginBottom: 16, borderRadius: 30, padding: 16, overflow: "hidden" },
   orderShowcaseGreen: { backgroundColor: "#d9f99d" },
@@ -1598,7 +1791,7 @@ const styles = StyleSheet.create({
   toggleChipText: { color: "#6b7280", fontSize: 12, fontWeight: "700" },
   toggleChipTextActive: { color: "#c2410c" },
   darkShell: { backgroundColor: "#f9fafb" },
-  darkBrowseScroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20 },
+  darkBrowseScroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20 },
   darkBrowseHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
   darkLocationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   darkLocationTitle: { color: "#111827", fontSize: 15, fontWeight: "800" },

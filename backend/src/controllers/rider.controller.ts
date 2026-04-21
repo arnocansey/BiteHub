@@ -100,17 +100,35 @@ export const riderController = {
   },
 
   async updateAvailability(req: Request, res: Response) {
+    const nextIsOnline = Boolean(req.body.isOnline);
     const rider = await prisma.riderProfile.update({
       where: { userId: req.user!.sub },
-      data: { isOnline: req.body.isOnline }
+      data: {
+        isOnline: nextIsOnline,
+        currentLatitude: nextIsOnline ? undefined : null,
+        currentLongitude: nextIsOnline ? undefined : null
+      }
     });
 
     res.json(rider);
   },
 
   async updateLocation(req: Request, res: Response) {
-    const rider = await prisma.riderProfile.update({
+    const existingRider = await prisma.riderProfile.findUnique({
       where: { userId: req.user!.sub },
+      select: { id: true, isOnline: true }
+    });
+
+    if (!existingRider) {
+      return res.status(404).json({ message: "Rider profile not found." });
+    }
+
+    if (!existingRider.isOnline) {
+      return res.status(409).json({ message: "Go online before sharing live location." });
+    }
+
+    const rider = await prisma.riderProfile.update({
+      where: { id: existingRider.id },
       data: {
         currentLatitude: req.body.latitude,
         currentLongitude: req.body.longitude

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 
 type HeatZone = {
@@ -32,7 +32,37 @@ type RestaurantMarker = {
   address?: string | null;
   averageRating?: number | null;
   isFeatured?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
 };
+
+type SearchLocation = {
+  displayName: string;
+  formattedAddress: string;
+  latitude: number;
+  longitude: number;
+};
+
+const mapboxAccessToken = process.env.NEXT_PUBLIC_MAPBOX_ACCESS_TOKEN?.trim();
+const configuredMapboxStyleId = process.env.NEXT_PUBLIC_MAPBOX_STYLE_ID?.trim();
+const mapboxUseCustomStyle = process.env.NEXT_PUBLIC_MAPBOX_USE_CUSTOM_STYLE?.trim().toLowerCase() === "true";
+const mapboxStyleId = mapboxUseCustomStyle && configuredMapboxStyleId ? configuredMapboxStyleId : "mapbox/dark-v11";
+
+function createOpenStreetMapLayer() {
+  return L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors"
+  });
+}
+
+function createMapboxLayer() {
+  if (!mapboxAccessToken) return null;
+
+  return L.tileLayer(`https://api.mapbox.com/styles/v1/${mapboxStyleId}/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxAccessToken}`, {
+    attribution:
+      '&copy; <a href="https://www.mapbox.com/about/maps/" target="_blank" rel="noreferrer">Mapbox</a> &copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a> contributors',
+    crossOrigin: true
+  });
+}
 
 const ghanaZoneCoordinates = [
   { keywords: ["accra", "osu", "airport", "cantonments", "labone"], lat: 5.5607, lng: -0.2057 },
@@ -86,6 +116,7 @@ export function GhanaDispatchMap({
   zones,
   activeRiders,
   restaurants,
+  searchLocation,
   focusedZoneId,
   focusedRiderId,
   focusedRestaurantId,
@@ -96,6 +127,7 @@ export function GhanaDispatchMap({
   zones: HeatZone[];
   activeRiders: ActiveRider[];
   restaurants?: RestaurantMarker[];
+  searchLocation?: SearchLocation | null;
   focusedZoneId?: string | null;
   focusedRiderId?: string | null;
   focusedRestaurantId?: string | null;
@@ -106,6 +138,9 @@ export function GhanaDispatchMap({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layerGroupRef = useRef<L.LayerGroup | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const hasSwappedTileLayerRef = useRef(false);
+  const [isUsingFallbackTiles, setIsUsingFallbackTiles] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -117,18 +152,57 @@ export function GhanaDispatchMap({
       zoomControl: false
     });
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: "&copy; OpenStreetMap contributors"
-    }).addTo(map);
+    const swapToFallbackTiles = () => {
+      if (hasSwappedTileLayerRef.current) return;
+      hasSwappedTileLayerRef.current = true;
+      setIsUsingFallbackTiles(true);
+
+      tileLayerRef.current?.removeFrom(map);
+      const fallbackLayer = createOpenStreetMapLayer();
+      fallbackLayer.addTo(map);
+      tileLayerRef.current = fallbackLayer;
+    };
+
+    const tileLayer = createMapboxLayer() ?? createOpenStreetMapLayer();
+    if (mapboxAccessToken) {
+      tileLayer.on("tileerror", swapToFallbackTiles);
+    } else {
+      setIsUsingFallbackTiles(true);
+    }
+
+    tileLayer.addTo(map);
+    tileLayerRef.current = tileLayer;
 
     layerGroupRef.current = L.layerGroup().addTo(map);
     mapRef.current = map;
 
+    const invalidate = () => map.invalidateSize();
+    const resizeTimer = window.setTimeout(invalidate, 120);
+    const animationFrame = window.requestAnimationFrame(invalidate);
+    const handleWindowResize = () => invalidate();
+    window.addEventListener("resize", handleWindowResize);
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            invalidate();
+          })
+        : null;
+
+    resizeObserver?.observe(containerRef.current);
+
     return () => {
+      window.clearTimeout(resizeTimer);
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener("resize", handleWindowResize);
+      resizeObserver?.disconnect();
       layerGroupRef.current?.clearLayers();
+      tileLayerRef.current?.remove();
       map.remove();
       mapRef.current = null;
       layerGroupRef.current = null;
+      tileLayerRef.current = null;
+      hasSwappedTileLayerRef.current = false;
     };
   }, []);
 
@@ -176,6 +250,11 @@ export function GhanaDispatchMap({
 
     activeRiders.forEach((rider) => {
       const riderName = [rider.user?.firstName, rider.user?.lastName].filter(Boolean).join(" ").trim() || "Active rider";
+      const riderStatusLabel = `${rider.vehicleType ?? "Rider"} | Online`;
+      const riderDeliveryLabel = rider.activeDelivery?.restaurantName
+        ? `On delivery for ${rider.activeDelivery.restaurantName}`
+        : "Available for assignment";
+
       const marker = L.circleMarker([rider.currentLatitude, rider.currentLongitude], {
         radius: rider.id === focusedRiderId ? 8 : 6,
         color: "#38bdf8",
@@ -187,8 +266,8 @@ export function GhanaDispatchMap({
       marker.bindTooltip(
         `<div style="min-width: 160px;">
           <div style="font-weight:700; margin-bottom:4px;">${riderName}</div>
-          <div style="font-size:12px; color:#cbd5e1;">${rider.vehicleType ?? "Rider"} · Online</div>
-          <div style="font-size:12px; color:#cbd5e1;">${rider.activeDelivery?.restaurantName ? `On delivery for ${rider.activeDelivery.restaurantName}` : "Available for assignment"}</div>
+          <div style="font-size:12px; color:#cbd5e1;">${riderStatusLabel}</div>
+          <div style="font-size:12px; color:#cbd5e1;">${riderDeliveryLabel}</div>
         </div>`,
         {
           direction: "top",
@@ -204,8 +283,10 @@ export function GhanaDispatchMap({
     });
 
     (restaurants ?? []).forEach((restaurant, index) => {
-      const sourceLabel = `${restaurant.address ?? ""} ${restaurant.name}`.trim();
-      const coords = getZoneCoordinates(sourceLabel || restaurant.name, index);
+      const coords =
+        typeof restaurant.latitude === "number" && typeof restaurant.longitude === "number"
+          ? { lat: restaurant.latitude, lng: restaurant.longitude }
+          : getZoneCoordinates(`${restaurant.address ?? ""} ${restaurant.name}`.trim() || restaurant.name, index);
       const marker = L.circleMarker([coords.lat, coords.lng], {
         radius: restaurant.id === focusedRestaurantId ? 7 : 5,
         color: restaurant.isFeatured ? "#f59e0b" : "#a855f7",
@@ -232,6 +313,30 @@ export function GhanaDispatchMap({
 
       marker.addTo(layerGroup);
     });
+
+    if (searchLocation) {
+      const marker = L.circleMarker([searchLocation.latitude, searchLocation.longitude], {
+        radius: 9,
+        color: "#f8fafc",
+        weight: 3,
+        fillColor: "#f59e0b",
+        fillOpacity: 0.95
+      });
+
+      marker.bindTooltip(
+        `<div style="min-width: 180px;">
+          <div style="font-weight:700; margin-bottom:4px;">${searchLocation.displayName}</div>
+          <div style="font-size:12px; color:#cbd5e1;">${searchLocation.formattedAddress}</div>
+        </div>`,
+        {
+          direction: "top",
+          permanent: true,
+          offset: [0, -6]
+        }
+      );
+
+      marker.addTo(layerGroup);
+    }
   }, [
     activeRiders,
     focusedRestaurantId,
@@ -241,6 +346,7 @@ export function GhanaDispatchMap({
     onRiderSelect,
     onZoneSelect,
     restaurants,
+    searchLocation,
     zones
   ]);
 
@@ -254,10 +360,23 @@ export function GhanaDispatchMap({
       return;
     }
 
+    if (searchLocation) {
+      map.flyTo([searchLocation.latitude, searchLocation.longitude], Math.max(map.getZoom(), 13), {
+        duration: 0.35
+      });
+      return;
+    }
+
     const focusedRestaurant = (restaurants ?? []).find((restaurant) => restaurant.id === focusedRestaurantId);
     if (focusedRestaurant) {
       const restaurantIndex = (restaurants ?? []).findIndex((restaurant) => restaurant.id === focusedRestaurantId);
-      const coords = getZoneCoordinates(`${focusedRestaurant.address ?? ""} ${focusedRestaurant.name}`.trim(), Math.max(0, restaurantIndex));
+      const coords =
+        typeof focusedRestaurant.latitude === "number" && typeof focusedRestaurant.longitude === "number"
+          ? { lat: focusedRestaurant.latitude, lng: focusedRestaurant.longitude }
+          : getZoneCoordinates(
+              `${focusedRestaurant.address ?? ""} ${focusedRestaurant.name}`.trim(),
+              Math.max(0, restaurantIndex)
+            );
       map.flyTo([coords.lat, coords.lng], Math.max(map.getZoom(), 8), { duration: 0.35 });
       return;
     }
@@ -268,13 +387,19 @@ export function GhanaDispatchMap({
       const coords = getZoneCoordinates(focusedZone.zoneLabel, Math.max(0, zoneIndex));
       map.flyTo([coords.lat, coords.lng], Math.max(map.getZoom(), 7), { duration: 0.35 });
     }
-  }, [activeRiders, focusedRestaurantId, focusedRiderId, focusedZoneId, restaurants, zones]);
+  }, [activeRiders, focusedRestaurantId, focusedRiderId, focusedZoneId, restaurants, searchLocation, zones]);
 
   return (
     <div className="relative mt-6 overflow-hidden rounded-[28px] border border-slate-700 bg-[#07101d]">
       <div ref={containerRef} className="h-[360px] w-full md:h-[440px] xl:h-[500px]" />
 
-      <div className="absolute bottom-4 left-4 rounded-2xl border border-white/10 bg-slate-950/85 px-4 py-3 backdrop-blur">
+      {isUsingFallbackTiles ? (
+        <div className="absolute right-4 top-4 z-[1200] rounded-full border border-amber-400/30 bg-slate-950/90 px-3 py-1.5 text-[11px] font-medium text-amber-200 shadow-lg backdrop-blur">
+          Mapbox tiles unavailable, using OpenStreetMap fallback
+        </div>
+      ) : null}
+
+      <div className="absolute bottom-4 left-4 z-[1200] rounded-2xl border border-white/10 bg-slate-950/90 px-4 py-3 shadow-xl backdrop-blur">
         <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Heat key</p>
         <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-200">
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Red zone</span>
@@ -282,6 +407,7 @@ export function GhanaDispatchMap({
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-emerald-400" /> Balanced</span>
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-sky-500" /> Active riders</span>
           <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-violet-400" /> Restaurants</span>
+          <span className="inline-flex items-center gap-2"><span className="h-2.5 w-2.5 rounded-full bg-amber-400" /> Place search</span>
         </div>
       </div>
     </div>

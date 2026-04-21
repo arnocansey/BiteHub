@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeDollarSign, Bike, CreditCard, Radio, Search, ShieldBan, Sparkles, UserPlus, Users } from "lucide-react";
 import { AccessDeniedCard, AuthRequiredCard, EmptyCard, ErrorCard, LoadingCard } from "../../components/admin-states";
 import { DashboardShell } from "../../components/dashboard-shell";
+import { GooglePlacesPanel, type GooglePlaceSelection } from "../../components/google-places-panel";
 import { hasAdminAccess } from "../../lib/admin-access";
 import { adminRequest, useAdminData, useAdminSessionState } from "../../lib/admin-client";
 
@@ -111,7 +112,15 @@ type OperationsIntelligence = {
   heatmap: Array<{ id: string; zoneLabel: string; demandLevel: number; supplyLevel: number; activeOrders: number }>;
 };
 
-type RestaurantRecord = { id: string; name: string; address?: string | null; averageRating?: number | null; isFeatured?: boolean };
+type RestaurantRecord = {
+  id: string;
+  name: string;
+  address?: string | null;
+  averageRating?: number | null;
+  isFeatured?: boolean;
+  latitude?: number | null;
+  longitude?: number | null;
+};
 
 const currency = new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS", maximumFractionDigits: 2 });
 const emptyCourierForm = { firstName: "", lastName: "", email: "", phone: "", password: "", vehicleType: "" };
@@ -149,6 +158,7 @@ export default function RidersPage() {
   const [selectedCourierId, setSelectedCourierId] = useState<string | null>(null);
   const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
   const [tripSearch, setTripSearch] = useState("");
+  const [selectedPlace, setSelectedPlace] = useState<GooglePlaceSelection | null>(null);
   const [leadActionLoading, setLeadActionLoading] = useState<string | null>(null);
   const [savingCourier, setSavingCourier] = useState(false);
   const [creatingCourier, setCreatingCourier] = useState(false);
@@ -378,6 +388,7 @@ export default function RidersPage() {
                         : null
                   }))}
                 restaurants={restaurants}
+                searchLocation={selectedPlace}
                 focusedZoneId={selectedZoneId}
                 focusedRiderId={selectedCourier?.id ?? null}
                 focusedRestaurantId={null}
@@ -403,6 +414,13 @@ export default function RidersPage() {
           </article>
 
           <aside className="space-y-6">
+            <GooglePlacesPanel
+              title="Dispatch location search"
+              description="Use Google Places to jump the fleet map to a pickup hotspot, customer address, or rider landmark."
+              onPlaceSelect={setSelectedPlace}
+              heightClassName="h-[300px]"
+            />
+
             <article className="rounded-[32px] border border-slate-800 bg-slate-950/85 p-5">
               <div className="flex items-center justify-between gap-3">
                 <div>
