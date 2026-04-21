@@ -2,10 +2,11 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AppState, Image, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BiteHubSplash } from "./components/BiteHubSplash";
@@ -48,6 +49,7 @@ type PrivateDataBundle = {
 const sessionStorageKey = "bitehub_customer_session";
 const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
 const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
+const updateCheckThrottleMs = 5 * 60 * 1000;
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -99,6 +101,22 @@ function buildLocationLabel(places: Location.LocationGeocodedAddress[]) {
   const place = places[0];
   if (!place) return null;
   return [place.district, place.city, place.region, place.country].filter(Boolean).slice(0, 3).join(", ");
+}
+
+async function syncOverTheAirUpdate() {
+  if (__DEV__ || !Updates.isEnabled) return false;
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (!update.isAvailable) return false;
+
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync();
+    return true;
+  } catch (error) {
+    console.warn("Customer OTA update check failed.", error);
+    return false;
+  }
 }
 
 function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: number | null }>) {
@@ -190,6 +208,7 @@ export default function App() {
 }
 
 function AppContent() {
+  const otaCheckedAtRef = useRef(0);
   const [showSplash, setShowSplash] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -245,6 +264,24 @@ function AppContent() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [paymentAuthorizationUrl, setPaymentAuthorizationUrl] = useState<string | null>(null);
   const [paymentReference, setPaymentReference] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function runUpdateCheck() {
+      const now = Date.now();
+      if (now - otaCheckedAtRef.current < updateCheckThrottleMs) return;
+      otaCheckedAtRef.current = now;
+      await syncOverTheAirUpdate();
+    }
+
+    void runUpdateCheck();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void runUpdateCheck();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   async function refreshSessionTokens(activeSession: Session) {
     const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
@@ -1653,16 +1690,16 @@ function AppContent() {
 
 const pill = { borderRadius: 999, overflow: "hidden" } as const;
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#f9fafb" }, shell: { flex: 1, backgroundColor: "#f9fafb" }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 22 },
+  safeArea: { flex: 1, backgroundColor: "#f9fafb" }, shell: { flex: 1, backgroundColor: "#f9fafb" }, header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 18 },
   headerTitle: { fontSize: 24, fontWeight: "800", color: "#111827" }, headerBrandWrap: { flexDirection: "row", alignItems: "center", gap: 10 }, headerChip: { ...pill, backgroundColor: "#fff7ed", paddingHorizontal: 12, paddingVertical: 8 }, headerChipText: { color: "#c2410c", fontWeight: "800" }, caption: { fontSize: 12, color: "#9ca3af", marginTop: 4 },
   brandLogoLarge: { width: 152, height: 152, alignSelf: "center" }, brandLogoSmall: { width: 42, height: 42 },
   search: { marginHorizontal: 20, marginTop: 16, borderRadius: 20, backgroundColor: "#f3f4f6", paddingHorizontal: 14, paddingVertical: 12, flexDirection: "row", alignItems: "center", gap: 10 }, searchInput: { flex: 1, fontSize: 14, color: "#374151" }, filterChip: { borderRadius: 14, backgroundColor: "#f97316", paddingHorizontal: 12, paddingVertical: 8 }, filterChipText: { color: "#fff", fontSize: 12, fontWeight: "800" },
   locationCard: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff7ed", padding: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 }, locationIconWrap: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#ffffff", alignItems: "center", justifyContent: "center" }, locationEyebrow: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: "#c2410c" }, locationTitle: { marginTop: 6, fontSize: 16, fontWeight: "800", color: "#111827" }, locationMeta: { marginTop: 4, fontSize: 12, lineHeight: 18, color: "#6b7280" }, locationHint: { marginTop: 6, fontSize: 12, lineHeight: 18, color: "#9a3412" }, locationButton: { borderRadius: 16, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 10 }, locationButtonText: { color: "#c2410c", fontSize: 12, fontWeight: "800" },
-  scroll: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 26 }, heroCard: { borderRadius: 30, backgroundColor: "#111827", padding: 22, marginBottom: 18 }, heroLabel: { fontSize: 11, fontWeight: "800", color: "#fdba74", textTransform: "uppercase", letterSpacing: 0.8 }, heroTitle: { marginTop: 10, fontSize: 28, lineHeight: 34, color: "#fff", fontWeight: "800" }, heroCopy: { marginTop: 12, fontSize: 14, lineHeight: 22, color: "#d1d5db" },
+  scroll: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 26 }, heroCard: { borderRadius: 30, backgroundColor: "#111827", padding: 22, marginBottom: 18 }, heroLabel: { fontSize: 11, fontWeight: "800", color: "#fdba74", textTransform: "uppercase", letterSpacing: 0.8 }, heroTitle: { marginTop: 10, fontSize: 28, lineHeight: 34, color: "#fff", fontWeight: "800" }, heroCopy: { marginTop: 12, fontSize: 14, lineHeight: 22, color: "#d1d5db" },
   sectionTitle: { marginTop: 8, marginBottom: 12, fontSize: 18, fontWeight: "800", color: "#111827" }, horizontalList: { gap: 12, paddingBottom: 4 }, featureCard: { width: 260, borderRadius: 28, backgroundColor: "#fb923c", padding: 18, marginBottom: 18 }, featureEyebrow: { color: "#ffedd5", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 }, featureTitle: { color: "#fff", fontSize: 22, lineHeight: 28, fontWeight: "800", marginTop: 10 }, featureCopy: { color: "#fff7ed", fontSize: 13, lineHeight: 20, marginTop: 10 }, featureMeta: { color: "#7c2d12", fontSize: 12, fontWeight: "800", marginTop: 14 },
   collectionCard: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff7ed", padding: 16 }, collectionTitle: { fontSize: 16, fontWeight: "800", color: "#9a3412" }, collectionPill: { minWidth: 180, borderRadius: 22, backgroundColor: "#fff", padding: 14 }, collectionPillTitle: { fontSize: 14, fontWeight: "800", color: "#111827" }, collectionPillMeta: { marginTop: 6, fontSize: 12, lineHeight: 18, color: "#6b7280" },
   card: { marginBottom: 14, borderRadius: 28, backgroundColor: "#fff", padding: 16, flexDirection: "row", alignItems: "center", gap: 14 }, cardTitle: { fontSize: 15, fontWeight: "800", color: "#111827" }, cardMeta: { marginTop: 4, fontSize: 12, lineHeight: 18, color: "#6b7280" }, thumb: { width: 64, height: 64, borderRadius: 22, backgroundColor: "#fff7ed", alignItems: "center", justifyContent: "center" }, thumbText: { fontSize: 24, color: "#c2410c", fontWeight: "800" }, heart: { fontSize: 12, fontWeight: "800", color: "#f97316" },
-  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingTop: 22 }, iconButton: { minWidth: 56, height: 40, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, iconButtonText: { fontSize: 13, color: "#374151", fontWeight: "700" }, storyCard: { marginBottom: 14, borderRadius: 30, backgroundColor: "#1f2937", padding: 20 }, storyEyebrow: { color: "#fdba74", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 }, storyTitle: { color: "#fff", fontSize: 26, lineHeight: 32, fontWeight: "800", marginTop: 10 }, storyCopy: { color: "#e5e7eb", fontSize: 14, lineHeight: 22, marginTop: 12 }, storyNote: { color: "#fed7aa", fontSize: 13, lineHeight: 20, marginTop: 12, fontWeight: "700" }, storyMeta: { color: "#d1d5db", fontSize: 12, lineHeight: 18, marginTop: 10 },
+  headerRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 20, paddingTop: 18 }, iconButton: { minWidth: 56, height: 40, borderRadius: 16, backgroundColor: "#f3f4f6", alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }, iconButtonText: { fontSize: 13, color: "#374151", fontWeight: "700" }, storyCard: { marginBottom: 14, borderRadius: 30, backgroundColor: "#1f2937", padding: 20 }, storyEyebrow: { color: "#fdba74", fontSize: 11, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.8 }, storyTitle: { color: "#fff", fontSize: 26, lineHeight: 32, fontWeight: "800", marginTop: 10 }, storyCopy: { color: "#e5e7eb", fontSize: 14, lineHeight: 22, marginTop: 12 }, storyNote: { color: "#fed7aa", fontSize: 13, lineHeight: 20, marginTop: 12, fontWeight: "700" }, storyMeta: { color: "#d1d5db", fontSize: 12, lineHeight: 18, marginTop: 10 },
   price: { marginTop: 8, fontSize: 14, fontWeight: "800", color: "#f97316" }, inlineMeta: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }, inlineBadge: { ...pill, backgroundColor: "#fed7aa", color: "#9a3412", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "800" }, inlineBadgeMuted: { ...pill, backgroundColor: "#ffedd5", color: "#c2410c", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "700" }, inlineTag: { ...pill, backgroundColor: "#f3f4f6", color: "#4b5563", paddingHorizontal: 10, paddingVertical: 4, fontSize: 11, fontWeight: "700" },
   actionRow: { flexDirection: "row", gap: 10, marginTop: 14, flexWrap: "wrap" }, secondaryButton: { borderRadius: 18, backgroundColor: "#fff7ed", paddingHorizontal: 14, paddingVertical: 12 }, secondaryButtonText: { color: "#c2410c", fontSize: 12, fontWeight: "800" },
   qtyRow: { flexDirection: "row", alignItems: "center", gap: 8 }, qty: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#f97316", alignItems: "center", justifyContent: "center" }, qtyText: { color: "#fff", fontSize: 18, fontWeight: "800" }, qtyAlt: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#ffedd5", alignItems: "center", justifyContent: "center" }, qtyAltText: { color: "#c2410c", fontSize: 18, fontWeight: "800" }, qtyCount: { minWidth: 18, textAlign: "center", fontSize: 14, fontWeight: "800", color: "#111827" },
@@ -1681,7 +1718,7 @@ const styles = StyleSheet.create({
   profileCard: { marginTop: 18, borderRadius: 28, backgroundColor: "#fff", padding: 18, flexDirection: "row", alignItems: "center", gap: 14 }, avatar: { width: 68, height: 68, borderRadius: 34, backgroundColor: "#ffedd5", alignItems: "center", justifyContent: "center" }, avatarText: { color: "#c2410c", fontSize: 20, fontWeight: "800" }, timelineRow: { flexDirection: "row", alignItems: "flex-start", gap: 12, marginTop: 14 }, timelineDot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#f97316", marginTop: 4 }, cardTitleSmall: { fontSize: 14, fontWeight: "800", color: "#111827" }, tagWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 }, tagPill: { ...pill, backgroundColor: "#fff7ed", paddingHorizontal: 12, paddingVertical: 7 }, tagText: { color: "#c2410c", fontSize: 12, fontWeight: "800" }, collectionReason: { marginTop: 12, borderTopWidth: 1, borderTopColor: "#f3f4f6", paddingTop: 12 },
   bottomNavWrap: { paddingHorizontal: 20, paddingBottom: 16, backgroundColor: "#f9fafb" },
   bottomNav: { borderRadius: 26, backgroundColor: "#111827", paddingVertical: 12, paddingHorizontal: 6, flexDirection: "row", justifyContent: "space-around" }, navItem: { minWidth: 58, alignItems: "center", gap: 4, borderRadius: 18, paddingVertical: 8 }, navLabel: { fontSize: 12, fontWeight: "700", color: "#9ca3af" }, navLabelActive: { color: "#ffffff" }, badge: { position: "absolute", right: -2, top: 2, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#f97316", alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }, badgeText: { color: "#fff", fontSize: 9, fontWeight: "800" },
-  shopScroll: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 18 },
+  shopScroll: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18 },
   shopHeader: { marginBottom: 16 },
   shopHeaderTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   shopLocationPill: { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: 18, backgroundColor: "#ffffff", paddingHorizontal: 12, paddingVertical: 9 },
@@ -1723,7 +1760,7 @@ const styles = StyleSheet.create({
   detailHero: { height: 310, borderBottomLeftRadius: 34, borderBottomRightRadius: 34, backgroundColor: "#d9f99d", paddingHorizontal: 18, paddingTop: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   detailTopButton: { width: 38, height: 38, borderRadius: 19, backgroundColor: "rgba(255,255,255,0.75)", alignItems: "center", justifyContent: "center" },
   detailHeroPlate: { position: "absolute", left: 0, right: 0, top: 74, alignItems: "center", justifyContent: "center" },
-  detailContent: { marginTop: -12, borderTopLeftRadius: 32, borderTopRightRadius: 32, backgroundColor: "#f9fafb", paddingHorizontal: 20, paddingTop: 24 },
+  detailContent: { marginTop: -22, borderTopLeftRadius: 32, borderTopRightRadius: 32, backgroundColor: "#f9fafb", paddingHorizontal: 20, paddingTop: 24 },
   detailTitle: { fontSize: 28, fontWeight: "900", color: "#111827" },
   detailSubhead: { marginTop: 6, color: "#6b7280", fontSize: 13, lineHeight: 19 },
   detailPriceRow: { marginTop: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -1765,7 +1802,7 @@ const styles = StyleSheet.create({
   locationSignalMeta: { color: "#9a3412", fontSize: 12, fontWeight: "700" },
   customerMapWrap: { marginTop: 12, borderRadius: 22, overflow: "hidden", borderWidth: 1, borderColor: "#fed7aa" },
   customerMap: { width: "100%", height: 240 },
-  ordersScroll: { paddingHorizontal: 18, paddingTop: 24, paddingBottom: 18 },
+  ordersScroll: { paddingHorizontal: 18, paddingTop: 18, paddingBottom: 18 },
   ordersPageTitle: { marginBottom: 16, fontSize: 28, fontWeight: "900", color: "#111827", alignSelf: "center" },
   orderShowcaseCard: { marginBottom: 16, borderRadius: 30, padding: 16, overflow: "hidden" },
   orderShowcaseGreen: { backgroundColor: "#d9f99d" },
@@ -1791,7 +1828,7 @@ const styles = StyleSheet.create({
   toggleChipText: { color: "#6b7280", fontSize: 12, fontWeight: "700" },
   toggleChipTextActive: { color: "#c2410c" },
   darkShell: { backgroundColor: "#f9fafb" },
-  darkBrowseScroll: { paddingHorizontal: 16, paddingTop: 20, paddingBottom: 20 },
+  darkBrowseScroll: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 20 },
   darkBrowseHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 18 },
   darkLocationRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   darkLocationTitle: { color: "#111827", fontSize: 15, fontWeight: "800" },

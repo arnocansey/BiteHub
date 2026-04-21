@@ -2,11 +2,12 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, Image, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, AppState, Dimensions, Easing, Image, Linking, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BiteHubSplash } from "./components/BiteHubSplash";
@@ -27,6 +28,7 @@ type RiderDataBundle = {
 const sessionStorageKey = "bitehub_rider_session";
 const riderProfileImageStorageKey = "bitehub_rider_profile_image";
 const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
+const updateCheckThrottleMs = 5 * 60 * 1000;
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -158,6 +160,22 @@ function resolveApiBaseUrl() {
 
 const apiBaseUrl = resolveApiBaseUrl();
 const riderLogo = require("./assets/bitehub-icon.png");
+
+async function syncOverTheAirUpdate() {
+  if (__DEV__ || !Updates.isEnabled) return false;
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (!update.isAvailable) return false;
+
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync();
+    return true;
+  } catch (error) {
+    console.warn("Rider OTA update check failed.", error);
+    return false;
+  }
+}
 const tutorialCardWidth = Dimensions.get("window").width - 72;
 const currencyFormatter = new Intl.NumberFormat("en-GH", {
   style: "currency",
@@ -307,6 +325,7 @@ export default function App() {
 }
 
 function AppContent() {
+  const otaCheckedAtRef = useRef(0);
   const [showSplash, setShowSplash] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -345,6 +364,24 @@ function AppContent() {
   const logoutOpacity = useRef(new Animated.Value(0)).current;
   const logoutTranslateY = useRef(new Animated.Value(32)).current;
   const tutorialPagerRef = useRef<ScrollView | null>(null);
+
+  useEffect(() => {
+    async function runUpdateCheck() {
+      const now = Date.now();
+      if (now - otaCheckedAtRef.current < updateCheckThrottleMs) return;
+      otaCheckedAtRef.current = now;
+      await syncOverTheAirUpdate();
+    }
+
+    void runUpdateCheck();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void runUpdateCheck();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
 
   async function refreshSessionTokens(activeSession: Session) {
     const response = await fetch(`${apiBaseUrl}/auth/refresh`, {
@@ -1424,7 +1461,7 @@ const styles = StyleSheet.create({
   authLinks: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 18 },
   authLink: { color: "#9a3412", fontSize: 13, fontWeight: "700" },
   authLinkActive: { color: "#f97316" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 22, paddingBottom: 12 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 12 },
   profileRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   avatar: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#fff7ed" },
   avatarPlaceholder: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#fff7ed", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "#fdba74" },
@@ -1477,7 +1514,7 @@ const styles = StyleSheet.create({
   onlineChipText: { fontSize: 12, fontWeight: "800" },
   onlineChipTextActive: { color: "#15803d" },
   onlineChipTextMuted: { color: "#6b7280" },
-  scroll: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 22 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 22 },
   profileScroll: { paddingTop: 12, flexGrow: 1 },
   tripFeatureShell: { marginBottom: 14, borderRadius: 28, backgroundColor: "rgba(255,255,255,0.58)", borderWidth: 1, borderColor: "rgba(255,255,255,0.72)", padding: 16, shadowColor: "#111827", shadowOpacity: 0.06, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 2 },
   bikeHero: { marginTop: 12, borderRadius: 24, backgroundColor: "rgba(255,247,237,0.92)", padding: 18, overflow: "hidden" },

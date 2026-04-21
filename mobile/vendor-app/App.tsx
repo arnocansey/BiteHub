@@ -2,10 +2,11 @@ import { StatusBar } from "expo-status-bar";
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from "@tanstack/react-query";
 import Constants from "expo-constants";
+import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as ImagePicker from "expo-image-picker";
-import { useEffect, useMemo, useState } from "react";
-import { Alert, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Alert, AppState, Image, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import MapView, { Marker } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BiteHubSplash } from "./components/BiteHubSplash";
@@ -50,6 +51,7 @@ type PlaceSuggestion = {
 const sessionStorageKey = "bitehub_vendor_session";
 const productionApiBaseUrl = "https://bitehub-backend.up.railway.app/api/v1";
 const googleMapsApiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY?.trim();
+const updateCheckThrottleMs = 5 * 60 * 1000;
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -95,6 +97,22 @@ const currencyFormatter = new Intl.NumberFormat("en-GH", {
 
 function formatMoney(value: number) {
   return currencyFormatter.format(Number(value ?? 0));
+}
+
+async function syncOverTheAirUpdate() {
+  if (__DEV__ || !Updates.isEnabled) return false;
+
+  try {
+    const update = await Updates.checkForUpdateAsync();
+    if (!update.isAvailable) return false;
+
+    await Updates.fetchUpdateAsync();
+    await Updates.reloadAsync();
+    return true;
+  } catch (error) {
+    console.warn("Vendor OTA update check failed.", error);
+    return false;
+  }
 }
 
 function buildMapRegion(points: Array<{ latitude?: number | null; longitude?: number | null }>) {
@@ -248,6 +266,7 @@ export default function App() {
 }
 
 function AppContent() {
+  const otaCheckedAtRef = useRef(0);
   const [showSplash, setShowSplash] = useState(true);
   const [sessionReady, setSessionReady] = useState(false);
   const [session, setSession] = useState<Session | null>(null);
@@ -311,6 +330,24 @@ function AppContent() {
     isSignature: false,
     isFeatured: false
   });
+
+  useEffect(() => {
+    async function runUpdateCheck() {
+      const now = Date.now();
+      if (now - otaCheckedAtRef.current < updateCheckThrottleMs) return;
+      otaCheckedAtRef.current = now;
+      await syncOverTheAirUpdate();
+    }
+
+    void runUpdateCheck();
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        void runUpdateCheck();
+      }
+    });
+
+    return () => subscription.remove();
+  }, []);
   const [modifierDrafts, setModifierDrafts] = useState<ModifierGroupDraft[]>([]);
   const [editingRestaurantId, setEditingRestaurantId] = useState<string | null>(null);
   const [restaurantDraft, setRestaurantDraft] = useState({
@@ -2255,7 +2292,7 @@ const styles = StyleSheet.create({
   authLinks: { flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 18 },
   authLink: { color: "#9a3412", fontSize: 13, fontWeight: "700" },
   authLinkActive: { color: "#f97316" },
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 22, paddingBottom: 8 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, paddingTop: 18, paddingBottom: 8 },
   headerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   headerRight: { alignItems: "flex-end" },
   logoBadge: { width: 40, height: 40, borderRadius: 16 },
@@ -2264,7 +2301,7 @@ const styles = StyleSheet.create({
   notificationBadgeText: { color: "#ffffff", fontSize: 9, fontWeight: "800" },
   headerTitle: { fontSize: 20, fontWeight: "800", color: "#111827" },
   subtle: { marginTop: 4, fontSize: 12, color: "#6b7280" },
-  scroll: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 20 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 20 },
   heroCard: { marginBottom: 14, borderRadius: 28, backgroundColor: "#111827", padding: 22 },
   heroLabel: { fontSize: 11, fontWeight: "800", letterSpacing: 1, textTransform: "uppercase", color: "#fdba74" },
   heroValue: { marginTop: 8, fontSize: 34, fontWeight: "800", color: "#fff" },

@@ -30,9 +30,9 @@
     "bundle:mobile:customer:android": "npx eas-cli build --profile customer-installable --platform android --non-interactive",
     "bundle:mobile:vendor:android": "npx eas-cli build --profile vendor-installable --platform android --non-interactive",
     "bundle:mobile:rider:android": "npx eas-cli build --profile rider-installable --platform android --non-interactive",
-    "update:mobile:customer": "npx eas-cli update --channel customer-production --message \"BiteHub customer OTA update\" --non-interactive",
-    "update:mobile:vendor": "npx eas-cli update --channel vendor-production --message \"BiteHub vendor OTA update\" --non-interactive",
-    "update:mobile:rider": "npx eas-cli update --channel rider-production --message \"BiteHub rider OTA update\" --non-interactive"
+    "update:mobile:customer": "npm --prefix mobile/customer-app exec eas update -- --channel customer-production --message \"BiteHub customer OTA update\" --non-interactive",
+    "update:mobile:vendor": "npm --prefix mobile/vendor-app exec eas update -- --channel vendor-production --message \"BiteHub vendor OTA update\" --non-interactive",
+    "update:mobile:rider": "npm --prefix mobile/rider-app exec eas update -- --channel rider-production --message \"BiteHub rider OTA update\" --non-interactive"
   },
   "devDependencies": {
     "metro": "^0.81.5",
